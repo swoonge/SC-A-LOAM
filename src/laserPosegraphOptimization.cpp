@@ -850,8 +850,9 @@ int main(int argc, char **argv)
 	ros::NodeHandle nh;
 
     // save directories 
-	nh.param<std::string>("save_directory", save_directory, "/"); // pose assignment every k m move 
+	// nh.param<std::string>("save_directory", save_directory, "/"); // pose assignment every k m move 
 
+    save_directory = "/home/vision/Documents/catkin2021/catkin_scaloam_scd_saver/data/out/kitti360-09-excloud-first-30percent/";
     pgKITTIformat = save_directory + "optimized_poses.txt";
     odomKITTIformat = save_directory + "odom_poses.txt";
 
