@@ -138,6 +138,7 @@ std::vector<std::string> edges_str; // used in writeEdge
 
 std::string padZeros(int val, int num_digits = 6) 
 {
+    cout << "padZeros" << endl;
   std::ostringstream out;
   out << std::internal << std::setfill('0') << std::setw(num_digits) << val;
   return out.str();
@@ -780,6 +781,7 @@ void process_viz_path(void)
     ros::Rate rate(hz);
     while (ros::ok()) {
         rate.sleep();
+        // cout << "path publist process..." << endl;
         if(recentIdxUpdated > 1) {
             pubPath();
         }
@@ -842,7 +844,6 @@ void process_viz_map(void)
         }
     }
 } // pointcloud_viz
-
 
 int main(int argc, char **argv)
 {
