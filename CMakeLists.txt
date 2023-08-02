@@ -64,6 +64,17 @@ target_link_libraries(alaserPGO
   ${OpenMP_CXX_FLAGS}
   gtsam
 )
+add_executable(lib_test 
+  src/lib_test.cpp
+)
+target_compile_options(lib_test 
+  PRIVATE ${OpenMP_CXX_FLAGS}
+)
+target_link_libraries(lib_test 
+  ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${CERES_LIBRARIES}
+  ${OpenMP_CXX_FLAGS}
+  gtsam
+)
 
 add_executable(kittiHelper src/kittiHelper.cpp)
 target_link_libraries(kittiHelper ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${OpenCV_LIBS})

@@ -1,6 +1,6 @@
 <launch>
     
-    <param name="scan_line" type="int" value="64" />
+    <param name="scan_line" type="int" value="16" />
 
     <!-- if 1, do mapping 10 Hz, if 2, do mapping 5 Hz. Suggest to use 1, it will adjust frequence automaticlly -->
     <param name="mapping_skip_frame" type="int" value="1" />
@@ -21,9 +21,10 @@
 
     <!-- utils -->
     <param name="save_directory" type="string" value="/home/vision/Documents/catkin2021/catkin_scaloam_scd_saver/data/out/kitti360-09-excloud-first-30percent"/>  <!-- CHANGE THIS and end with / -->
+    <param name="lidar_topic_name" type="str" value="/husky/velodyne_center/velodyne_points"/> 
 
     <!--  -->
-    <param name="lidar_type" type="string" value="HDL64"/> 
+    <param name="lidar_type" type="string" value="VLP16"/> 
     <remap from="/velodyne_points" to="/velodyne_points"/>
 
     <node pkg="aloam_velodyne" type="ascanRegistration" name="ascanRegistration" output="screen" />
