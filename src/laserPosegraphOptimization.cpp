@@ -726,7 +726,6 @@ void handmadeLoopClosure(void)
         scLoopICPBuf.push(std::pair<int, int>(41, 84));
         scLoopICPBuf.push(std::pair<int, int>(40, 85));
         scLoopICPBuf.push(std::pair<int, int>(39, 87));
-        // scLoopICPBuf.push(std::pair<int, int>(38, 88));
         scLoopICPBuf.push(std::pair<int, int>(35, 89));
         mBuf.unlock();
         handmadeLoopClosureFlage += 1;
@@ -736,26 +735,49 @@ void handmadeLoopClosure(void)
     if ((curr_node_idx > 350) && (handmadeLoopClosureFlage == 1)) {
         mBuf.lock();
         scLoopICPBuf.push(std::pair<int, int>(132, 343));
-        // scLoopICPBuf.push(std::pair<int, int>(133, 344));
         scLoopICPBuf.push(std::pair<int, int>(134, 345));
         scLoopICPBuf.push(std::pair<int, int>(135, 346));
         scLoopICPBuf.push(std::pair<int, int>(136, 347));
         scLoopICPBuf.push(std::pair<int, int>(137, 348));
-        // scLoopICPBuf.push(std::pair<int, int>(139, 349));
         scLoopICPBuf.push(std::pair<int, int>(132, 343));
         scLoopICPBuf.push(std::pair<int, int>(131, 342));
-        // scLoopICPBuf.push(std::pair<int, int>(129, 341));
         scLoopICPBuf.push(std::pair<int, int>(128, 340));
         mBuf.unlock();
         handmadeLoopClosureFlage += 1;
         cout << "Loop pair matched under 350 idx" << handmadeLoopClosureFlage << endl;
     }
-    if ((curr_node_idx > 700) && (handmadeLoopClosureFlage == 2)) {
+    if ((curr_node_idx > 400) && (handmadeLoopClosureFlage == 2)) { //시작점 and 다시 스쳐지나감
         mBuf.lock();
-        scLoopICPBuf.push(std::pair<int, int>(8, 697));
-        scLoopICPBuf.push(std::pair<int, int>(7, 698));
-        scLoopICPBuf.push(std::pair<int, int>(6, 699));
-        scLoopICPBuf.push(std::pair<int, int>(5, 700));
+        scLoopICPBuf.push(std::pair<int, int>(15, 393));
+        scLoopICPBuf.push(std::pair<int, int>(16, 394));
+
+        mBuf.unlock();
+        handmadeLoopClosureFlage += 1;
+        cout << "Loop pair matched under 400 idx" << handmadeLoopClosureFlage << endl;
+    }
+    if ((curr_node_idx > 700) && (handmadeLoopClosureFlage == 3)) {
+        mBuf.lock();
+        scLoopICPBuf.push(std::pair<int, int>(379, 672));
+        scLoopICPBuf.push(std::pair<int, int>(380, 676));
+        scLoopICPBuf.push(std::pair<int, int>(384, 681));
+        scLoopICPBuf.push(std::pair<int, int>(388, 685));
+        scLoopICPBuf.push(std::pair<int, int>(391, 688));
+        scLoopICPBuf.push(std::pair<int, int>(392, 689));
+
+        mBuf.unlock();
+        handmadeLoopClosureFlage += 1;
+        cout << "Loop pair matched under 670 idx" << handmadeLoopClosureFlage << endl;
+    }
+    // cout << handmadeLoopClosureFlage << endl;
+    if ((curr_node_idx > 720) && (handmadeLoopClosureFlage == 4)) {
+        mBuf.lock();
+        // scLoopICPBuf.push(std::pair<int, int>(8, 700));
+
+        scLoopICPBuf.push(std::pair<int, int>(8, 700));
+        scLoopICPBuf.push(std::pair<int, int>(7, 702));
+        scLoopICPBuf.push(std::pair<int, int>(6, 704));
+        scLoopICPBuf.push(std::pair<int, int>(5, 706));
+        scLoopICPBuf.push(std::pair<int, int>(4, 708));
         mBuf.unlock();
         handmadeLoopClosureFlage += 1;
         cout << "Loop pair matched under 350 idx" << handmadeLoopClosureFlage << endl;
@@ -803,7 +825,7 @@ void visualizeConstraint()
     markerEdge.id = 1;
     markerEdge.pose.orientation.w = 1;
     markerEdge.scale.x = 0.1;
-    markerEdge.color.r = 1.0; markerEdge.color.g = 0; markerEdge.color.b = 0.1;
+    markerEdge.color.r = 0.0; markerEdge.color.g = 0; markerEdge.color.b = 0.9;
     markerEdge.color.a = 1;
 
     for (const auto& pair : ICPPassedPair) {
