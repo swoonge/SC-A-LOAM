@@ -550,13 +550,20 @@ std::optional<gtsam::Pose3> doICPVirtualRelative( int _loop_kf_idx, int _curr_kf
     Eigen::Affine3f correctionLidarFrame;
     correctionLidarFrame = icp.getFinalTransformation();
     pcl::getTranslationAndEulerAngles (correctionLidarFrame, x, y, z, roll, pitch, yaw);
-    gtsam::Pose3 poseFrom = Pose3(Rot3::RzRyRx(roll, pitch, yaw), Point3(x, y, z));
-    gtsam::Pose3 poseTo = Pose3(Rot3::RzRyRx(0.0, 0.0, 0.0), Point3(0.0, 0.0, 0.0));
+    gtsam::Pose3 poseFromR = Pose3(Rot3::RzRyRx(roll, pitch, yaw), Point3(x, y, z));
+    gtsam::Pose3 poseToR = Pose3(Rot3::RzRyRx(0.0, 0.0, 0.0), Point3(0.0, 0.0, 0.0));
+    gtsam::Pose3 relPoseR = poseFromR.between(poseToR);
 
     ICPPassedPair.push_back(std::make_pair(_loop_kf_idx, _curr_kf_idx));
-    // ICPPassedPair.push_back(_loop_kf_idx, _curr_kf_idx);s
 
-    return poseFrom.between(poseTo);
+    /// 절대 좌표 더해주기_loop_kf_idx, int _curr_kf_idx 
+    gtsam::Pose3 poseFromG = Pose6DtoGTSAMPose3(keyframePoses.at(_loop_kf_idx));
+    gtsam::Pose3 poseToG = Pose6DtoGTSAMPose3(keyframePoses.at(_curr_kf_idx));
+    gtsam::Pose3 relPoseG = poseFromG.between(poseToG);
+    ///
+    gtsam::Pose3 relPoseF = relPoseR * relPoseG;
+    cout << relPoseR << relPoseG << relPoseF << endl;
+    return relPoseF;
 } // doICPVirtualRelative
 
 void process_pg()
@@ -769,7 +776,7 @@ void handmadeLoopClosure(void)
         cout << "Loop pair matched under 670 idx" << handmadeLoopClosureFlage << endl;
     }
     // cout << handmadeLoopClosureFlage << endl;
-    if ((curr_node_idx > 720) && (handmadeLoopClosureFlage == 4)) {
+    if ((curr_node_idx > 715) && (handmadeLoopClosureFlage == 4)) {
         mBuf.lock();
         // scLoopICPBuf.push(std::pair<int, int>(8, 700));
 
