@@ -729,11 +729,11 @@ void handmadeLoopClosure(void)
     const int curr_node_idx = keyframePoses.size() - 1;
     if ((curr_node_idx > 90) && (handmadeLoopClosureFlage == 0)) {
         mBuf.lock();
-        scLoopICPBuf.push(std::pair<int, int>(42, 80));
-        scLoopICPBuf.push(std::pair<int, int>(41, 84));
-        scLoopICPBuf.push(std::pair<int, int>(40, 85));
-        scLoopICPBuf.push(std::pair<int, int>(39, 87));
-        scLoopICPBuf.push(std::pair<int, int>(35, 89));
+        scLoopICPBuf.push(std::pair<int, int>(35, 88));
+        scLoopICPBuf.push(std::pair<int, int>(36, 85));
+        scLoopICPBuf.push(std::pair<int, int>(37, 83));
+        scLoopICPBuf.push(std::pair<int, int>(38, 81));
+        scLoopICPBuf.push(std::pair<int, int>(39, 78));
         mBuf.unlock();
         handmadeLoopClosureFlage += 1;
         cout << "Loop pair matched under 90 idx" << handmadeLoopClosureFlage << endl;
