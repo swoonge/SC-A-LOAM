@@ -95,6 +95,7 @@ std::vector<Pose6D> keyframePosesUpdated;
 std::vector<double> keyframeTimes;
 
 std::vector<std::pair<int, int>> ICPPassedPair;
+std::vector<std::pair<int, int>> HandlcPair;
 // std::vector<int, int> ICPPassedPair;
 
 std::vector<int> compareResultVec;
@@ -135,7 +136,7 @@ double recentOptimizedX = 0.0;
 double recentOptimizedY = 0.0;
 
 ros::Publisher pubMapAftPGO, pubOdomAftPGO, pubPathAftPGO;
-ros::Publisher pubLoopScanLocal, pubLoopSubmapLocal, pubConstraintEdge;
+ros::Publisher pubLoopScanLocal, pubLoopSubmapLocal, pubConstraintEdge, pubHandlc;
 ros::Publisher pubOdomRepubVerifier;
 
 std::string save_directory;
@@ -557,13 +558,13 @@ std::optional<gtsam::Pose3> doICPVirtualRelative( int _loop_kf_idx, int _curr_kf
     ICPPassedPair.push_back(std::make_pair(_loop_kf_idx, _curr_kf_idx));
 
     /// 절대 좌표 더해주기_loop_kf_idx, int _curr_kf_idx 
-    gtsam::Pose3 poseFromG = Pose6DtoGTSAMPose3(keyframePoses.at(_loop_kf_idx));
-    gtsam::Pose3 poseToG = Pose6DtoGTSAMPose3(keyframePoses.at(_curr_kf_idx));
-    gtsam::Pose3 relPoseG = poseFromG.between(poseToG);
+    // gtsam::Pose3 poseFromG = Pose6DtoGTSAMPose3(keyframePoses.at(_loop_kf_idx));
+    // gtsam::Pose3 poseToG = Pose6DtoGTSAMPose3(keyframePoses.at(_curr_kf_idx));
+    // gtsam::Pose3 relPoseG = poseFromG.between(poseToG);
     ///
-    gtsam::Pose3 relPoseF = relPoseR * relPoseG;
-    cout << relPoseR << relPoseG << relPoseF << endl;
-    return relPoseF;
+    // gtsam::Pose3 relPoseF = relPoseR * relPoseG;
+    // cout << relPoseR << relPoseG << relPoseF << endl;
+    return relPoseR;
 } // doICPVirtualRelative
 
 void process_pg()
@@ -727,28 +728,22 @@ int handmadeLoopClosureFlage = 0;
 void handmadeLoopClosure(void)
 {
     const int curr_node_idx = keyframePoses.size() - 1;
-    if ((curr_node_idx > 90) && (handmadeLoopClosureFlage == 0)) {
+    if ((curr_node_idx > 100) && (handmadeLoopClosureFlage == 0)) {
         mBuf.lock();
-        scLoopICPBuf.push(std::pair<int, int>(35, 88));
-        scLoopICPBuf.push(std::pair<int, int>(36, 85));
-        scLoopICPBuf.push(std::pair<int, int>(37, 83));
-        scLoopICPBuf.push(std::pair<int, int>(38, 81));
-        scLoopICPBuf.push(std::pair<int, int>(39, 78));
+        scLoopICPBuf.push(std::pair<int, int>(36, 90));
+        scLoopICPBuf.push(std::pair<int, int>(37, 85));
+        scLoopICPBuf.push(std::pair<int, int>(38, 83));
+        scLoopICPBuf.push(std::pair<int, int>(40, 81));
         mBuf.unlock();
         handmadeLoopClosureFlage += 1;
         cout << "Loop pair matched under 90 idx" << handmadeLoopClosureFlage << endl;
 
     }
-    if ((curr_node_idx > 350) && (handmadeLoopClosureFlage == 1)) {
+    if ((curr_node_idx > 220) && (handmadeLoopClosureFlage == 1)) {
         mBuf.lock();
-        scLoopICPBuf.push(std::pair<int, int>(132, 343));
-        scLoopICPBuf.push(std::pair<int, int>(134, 345));
-        scLoopICPBuf.push(std::pair<int, int>(135, 346));
-        scLoopICPBuf.push(std::pair<int, int>(136, 347));
-        scLoopICPBuf.push(std::pair<int, int>(137, 348));
-        scLoopICPBuf.push(std::pair<int, int>(132, 343));
-        scLoopICPBuf.push(std::pair<int, int>(131, 342));
-        scLoopICPBuf.push(std::pair<int, int>(128, 340));
+        scLoopICPBuf.push(std::pair<int, int>(13, 205));
+        scLoopICPBuf.push(std::pair<int, int>(11, 206));
+        scLoopICPBuf.push(std::pair<int, int>(10, 209));
         mBuf.unlock();
         handmadeLoopClosureFlage += 1;
         cout << "Loop pair matched under 350 idx" << handmadeLoopClosureFlage << endl;
@@ -789,7 +784,7 @@ void handmadeLoopClosure(void)
         handmadeLoopClosureFlage += 1;
         cout << "Loop pair matched under 350 idx" << handmadeLoopClosureFlage << endl;
     }
-    // cout << handmadeLoopClosureFlage << endl;
+    // cout << handmadeLoopClosureFlage << endl; ICPPassedPair.push_back(std::make_pair(_loop_kf_idx, _curr_kf_idx));
 }
 
 
@@ -805,6 +800,53 @@ void process_lcd(void)
 
     }
 } // process_lcd
+
+void visualizeHandlc()
+{    
+    visualization_msgs::MarkerArray markerArray;
+    // nodes
+    visualization_msgs::Marker markerNode;
+    markerNode.header.frame_id = "/camera_init"; // 
+    markerNode.header.stamp = ros::Time().fromSec(keyframeTimes.at(recentIdxUpdated));
+    markerNode.action = visualization_msgs::Marker::ADD;
+    markerNode.type = visualization_msgs::Marker::SPHERE_LIST;
+    markerNode.ns = "nodes";
+    markerNode.id = 0;
+    markerNode.pose.orientation.w = 1;
+    markerNode.scale.x = 0.3; markerNode.scale.y = 0.3; markerNode.scale.z = 0.3; 
+    markerNode.color.r = 0.4; markerNode.color.g = 0.4; markerNode.color.b = 1;
+    markerNode.color.a = 1;
+    // edges
+    visualization_msgs::Marker markerEdge;
+    markerEdge.header.frame_id = "/camera_init"; // 
+    markerEdge.header.stamp = ros::Time().fromSec(keyframeTimes.at(recentIdxUpdated));
+    markerEdge.action = visualization_msgs::Marker::ADD;
+    markerEdge.type = visualization_msgs::Marker::LINE_LIST;
+    markerEdge.ns = "edges";
+    markerEdge.id = 1;
+    markerEdge.pose.orientation.w = 1;
+    markerEdge.scale.x = 0.1;
+    markerEdge.color.r = 0.0; markerEdge.color.g = 0.7; markerEdge.color.b = 0.9;
+    markerEdge.color.a = 1;
+
+    for (const auto& pair : HandlcPair) {
+        geometry_msgs::Point p;
+        p.x = keyframePosesUpdated.at(pair.first).x;
+        p.y = keyframePosesUpdated.at(pair.first).y;
+        p.z = keyframePosesUpdated.at(pair.first).z;
+        markerNode.points.push_back(p);
+        markerEdge.points.push_back(p);
+
+        p.x = keyframePosesUpdated.at(pair.second).x;
+        p.y = keyframePosesUpdated.at(pair.second).y;
+        p.z = keyframePosesUpdated.at(pair.second).z;
+        markerNode.points.push_back(p);
+        markerEdge.points.push_back(p);
+    }
+    markerArray.markers.push_back(markerNode);
+    markerArray.markers.push_back(markerEdge);
+    pubHandlc.publish(markerArray);
+}
 
 
 void visualizeConstraint()
@@ -848,31 +890,7 @@ void visualizeConstraint()
         p.z = keyframePosesUpdated.at(pair.second).z;
         markerNode.points.push_back(p);
         markerEdge.points.push_back(p);
-        // std::cout << "첫 번째 값: " << pair.first << ", 두 번째 값: " << pair.second << std::endl;
     }
-
-    // for (int i=0; i < ICPPassedPair.size(); i++)
-    // {
-    //     // if(i%2 == 0){
-    //     //     continue;
-    //     // }
-
-    //     // centerKeyframeIndex = (int)((2 * i + MAP_FRAMES) / 2);  // (i +     i + MAP_FRAMES) / 2
-    //     // keyframePoses.at(prev_node_idx)
-    //     geometry_msgs::Point p;
-    //     p.x = keyframePosesUpdated.at(ICPPassedPair.at(i).first).x;
-    //     p.y = keyframePosesUpdated.at(ICPPassedPair.at(i).first).y;
-    //     p.z = keyframePosesUpdated.at(ICPPassedPair.at(i).first).z;
-    //     markerNode.points.push_back(p);
-    //     markerEdge.points.push_back(p);
-
-    //     p.x = keyframePosesUpdated.at(ICPPassedPair.at(i).seconde).x;
-    //     p.y = keyframePosesUpdated.at(ICPPassedPair.at(i).seconde).y;
-    //     p.z = keyframePosesUpdated.at(ICPPassedPair.at(i).seconde).z;
-    //     markerNode.points.push_back(p);
-    //     markerEdge.points.push_back(p);
-    // }
-
     markerArray.markers.push_back(markerNode);
     markerArray.markers.push_back(markerEdge);
     pubConstraintEdge.publish(markerArray);
@@ -895,11 +913,12 @@ void process_icp(void)
 
             const int prev_node_idx = loop_idx_pair.first;
             const int curr_node_idx = loop_idx_pair.second;
-            
+
+            HandlcPair.push_back(std::make_pair(prev_node_idx, curr_node_idx));
 
             auto relative_pose_optional = doICPVirtualRelative(prev_node_idx, curr_node_idx);
             if(relative_pose_optional) {
-                cout << relative_pose_optional.value() << endl;
+                // cout << relative_pose_optional.value() << endl;
                 gtsam::Pose3 relative_pose = relative_pose_optional.value();
                 mtxPosegraph.lock();
                 gtSAMgraph.add(gtsam::BetweenFactor<gtsam::Pose3>(prev_node_idx, curr_node_idx, relative_pose, robustLoopNoise));
@@ -1051,6 +1070,7 @@ int main(int argc, char **argv)
 	pubLoopSubmapLocal = nh.advertise<sensor_msgs::PointCloud2>("/loop_submap_local", 100);
 
     pubConstraintEdge = nh.advertise<visualization_msgs::MarkerArray>("/sc_match_constraints", 10);
+    pubHandlc = nh.advertise<visualization_msgs::MarkerArray>("/hand_lc_point", 10);
 
 	std::thread posegraph_slam {process_pg}; // pose graph construction
 	std::thread lc_detection {process_lcd}; // loop closure detection 
