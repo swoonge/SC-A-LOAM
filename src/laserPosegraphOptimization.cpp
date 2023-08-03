@@ -536,7 +536,7 @@ std::optional<gtsam::Pose3> doICPVirtualRelative( int _loop_kf_idx, int _curr_kf
     pcl::PointCloud<PointType>::Ptr unused_result(new pcl::PointCloud<PointType>());
     icp.align(*unused_result);
  
-    float loopFitnessScoreThreshold = 0.3; // user parameter but fixed low value is safe. 
+    float loopFitnessScoreThreshold = 0.1; // user parameter but fixed low value is safe. 
     if (icp.hasConverged() == false || icp.getFitnessScore() > loopFitnessScoreThreshold) {
         std::cout << "[SC loop] ICP fitness test failed (" << icp.getFitnessScore() << " > " << loopFitnessScoreThreshold << "). Reject this SC loop." << _loop_kf_idx << ", " << _curr_kf_idx << std::endl;
     
@@ -562,7 +562,7 @@ std::optional<gtsam::Pose3> doICPVirtualRelative( int _loop_kf_idx, int _curr_kf
     gtsam::Pose3 relPoseG = poseFromG.between(poseToG);
     ///
     gtsam::Pose3 relPoseF = relPoseR * relPoseG;
-    cout << relPoseR << relPoseG << relPoseF << endl;
+    // cout << relPoseR << relPoseG << relPoseF << endl;
     return relPoseF;
 } // doICPVirtualRelative
 
@@ -800,8 +800,8 @@ void process_lcd(void)
     while (ros::ok())
     {
         rate.sleep();
-        // performSCLoopClosure();
-        handmadeLoopClosure();
+        performSCLoopClosure();
+        // handmadeLoopClosure();
 
     }
 } // process_lcd
@@ -899,7 +899,7 @@ void process_icp(void)
 
             auto relative_pose_optional = doICPVirtualRelative(prev_node_idx, curr_node_idx);
             if(relative_pose_optional) {
-                cout << relative_pose_optional.value() << endl;
+                // cout << relative_pose_optional.value() << endl;
                 gtsam::Pose3 relative_pose = relative_pose_optional.value();
                 mtxPosegraph.lock();
                 gtSAMgraph.add(gtsam::BetweenFactor<gtsam::Pose3>(prev_node_idx, curr_node_idx, relative_pose, robustLoopNoise));
