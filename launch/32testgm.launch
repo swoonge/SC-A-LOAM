@@ -8,8 +8,8 @@
     <!-- remove too closed points -->
     <param name="minimum_range" type="double" value="5"/>
 
-    <param name="mapping_line_resolution" type="double" value="0.4"/> <!-- A-LOAM -->
-    <param name="mapping_plane_resolution" type="double" value="0.8"/> <!-- A-LOAM -->
+    <param name="mapping_line_resolution" type="double" value="0.2"/> <!-- A-LOAM -->
+    <param name="mapping_plane_resolution" type="double" value="0.4"/> <!-- A-LOAM -->
 
     <!-- SC-A-LOAM -->
     <param name="keyframe_meter_gap" type="double" value="2.0"/> 

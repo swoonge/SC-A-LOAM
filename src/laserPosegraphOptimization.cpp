@@ -136,7 +136,7 @@ double recentOptimizedX = 0.0;
 double recentOptimizedY = 0.0;
 
 ros::Publisher pubMapAftPGO, pubOdomAftPGO, pubPathAftPGO;
-ros::Publisher pubLoopScanLocal, pubLoopSubmapLocal, pubConstraintEdge, pubHandlc;
+ros::Publisher pubLoopScanLocal, pubLoopSubmapLocal, pubConstraintEdge, pubHandlc;//, pubLoopIcpResult;
 ros::Publisher pubOdomRepubVerifier;
 
 std::string save_directory;
@@ -536,8 +536,13 @@ std::optional<gtsam::Pose3> doICPVirtualRelative( int _loop_kf_idx, int _curr_kf
     icp.setInputTarget(targetKeyframeCloud);
     pcl::PointCloud<PointType>::Ptr unused_result(new pcl::PointCloud<PointType>());
     icp.align(*unused_result);
+
+    sensor_msgs::PointCloud2 IcpResultCloudMsg;
+    pcl::toROSMsg(*unused_result, IcpResultCloudMsg);
+    IcpResultCloudMsg.header.frame_id = "/camera_init";
+    pubLoopIcpResult.publish(IcpResultCloudMsg);
  
-    float loopFitnessScoreThreshold = 0.3; // user parameter but fixed low value is safe. 
+    float loopFitnessScoreThreshold = 100; // user parameter but fixed low value is safe. 
     if (icp.hasConverged() == false || icp.getFitnessScore() > loopFitnessScoreThreshold) {
         std::cout << "[SC loop] ICP fitness test failed (" << icp.getFitnessScore() << " > " << loopFitnessScoreThreshold << "). Reject this SC loop." << _loop_kf_idx << ", " << _curr_kf_idx << std::endl;
     
@@ -557,13 +562,13 @@ std::optional<gtsam::Pose3> doICPVirtualRelative( int _loop_kf_idx, int _curr_kf
 
     ICPPassedPair.push_back(std::make_pair(_loop_kf_idx, _curr_kf_idx));
 
-    /// 절대 좌표 더해주기_loop_kf_idx, int _curr_kf_idx 
+    // // 절대 좌표 더해주기_loop_kf_idx, int _curr_kf_idx 
     // gtsam::Pose3 poseFromG = Pose6DtoGTSAMPose3(keyframePoses.at(_loop_kf_idx));
     // gtsam::Pose3 poseToG = Pose6DtoGTSAMPose3(keyframePoses.at(_curr_kf_idx));
     // gtsam::Pose3 relPoseG = poseFromG.between(poseToG);
-    ///
+    // // //
     // gtsam::Pose3 relPoseF = relPoseR * relPoseG;
-    // cout << relPoseR << relPoseG << relPoseF << endl;
+    // //cout << relPoseR << relPoseG << relPoseF << endl;
     return relPoseR;
 } // doICPVirtualRelative
 
@@ -730,59 +735,44 @@ void handmadeLoopClosure(void)
     const int curr_node_idx = keyframePoses.size() - 1;
     if ((curr_node_idx > 100) && (handmadeLoopClosureFlage == 0)) {
         mBuf.lock();
-        scLoopICPBuf.push(std::pair<int, int>(36, 90));
+        scLoopICPBuf.push(std::pair<int, int>(35, 88));
         scLoopICPBuf.push(std::pair<int, int>(37, 85));
-        scLoopICPBuf.push(std::pair<int, int>(38, 83));
-        scLoopICPBuf.push(std::pair<int, int>(40, 81));
+        scLoopICPBuf.push(std::pair<int, int>(38, 84));
+        scLoopICPBuf.push(std::pair<int, int>(40, 80));
         mBuf.unlock();
         handmadeLoopClosureFlage += 1;
         cout << "Loop pair matched under 90 idx" << handmadeLoopClosureFlage << endl;
 
     }
-    if ((curr_node_idx > 220) && (handmadeLoopClosureFlage == 1)) {
+    if ((curr_node_idx > 210) && (handmadeLoopClosureFlage == 1)) {
         mBuf.lock();
-        scLoopICPBuf.push(std::pair<int, int>(13, 205));
-        scLoopICPBuf.push(std::pair<int, int>(11, 206));
-        scLoopICPBuf.push(std::pair<int, int>(10, 209));
+        scLoopICPBuf.push(std::pair<int, int>(11, 283));
+        scLoopICPBuf.push(std::pair<int, int>(9, 204));
+        scLoopICPBuf.push(std::pair<int, int>(8, 188));
         mBuf.unlock();
         handmadeLoopClosureFlage += 1;
         cout << "Loop pair matched under 350 idx" << handmadeLoopClosureFlage << endl;
     }
-    if ((curr_node_idx > 400) && (handmadeLoopClosureFlage == 2)) { //시작점 and 다시 스쳐지나감
+    if ((curr_node_idx > 450) && (handmadeLoopClosureFlage == 2)) { //시작점 and 다시 스쳐지나감
         mBuf.lock();
-        scLoopICPBuf.push(std::pair<int, int>(15, 393));
-        scLoopICPBuf.push(std::pair<int, int>(16, 394));
+        scLoopICPBuf.push(std::pair<int, int>(202, 460));
+        scLoopICPBuf.push(std::pair<int, int>(204, 459));
+        scLoopICPBuf.push(std::pair<int, int>(201, 458));
 
         mBuf.unlock();
         handmadeLoopClosureFlage += 1;
         cout << "Loop pair matched under 400 idx" << handmadeLoopClosureFlage << endl;
     }
-    if ((curr_node_idx > 700) && (handmadeLoopClosureFlage == 3)) {
+    if ((curr_node_idx > 470) && (handmadeLoopClosureFlage == 3)) {
         mBuf.lock();
-        scLoopICPBuf.push(std::pair<int, int>(379, 672));
-        scLoopICPBuf.push(std::pair<int, int>(380, 676));
-        scLoopICPBuf.push(std::pair<int, int>(384, 681));
-        scLoopICPBuf.push(std::pair<int, int>(388, 685));
-        scLoopICPBuf.push(std::pair<int, int>(391, 688));
-        scLoopICPBuf.push(std::pair<int, int>(392, 689));
-
+        scLoopICPBuf.push(std::pair<int, int>(199, 462));
+        scLoopICPBuf.push(std::pair<int, int>(198, 464));
+        scLoopICPBuf.push(std::pair<int, int>(197, 466));
+        scLoopICPBuf.push(std::pair<int, int>(195, 468));
+        scLoopICPBuf.push(std::pair<int, int>(193, 470));
         mBuf.unlock();
         handmadeLoopClosureFlage += 1;
         cout << "Loop pair matched under 670 idx" << handmadeLoopClosureFlage << endl;
-    }
-    // cout << handmadeLoopClosureFlage << endl;
-    if ((curr_node_idx > 715) && (handmadeLoopClosureFlage == 4)) {
-        mBuf.lock();
-        // scLoopICPBuf.push(std::pair<int, int>(8, 700));
-
-        scLoopICPBuf.push(std::pair<int, int>(8, 700));
-        scLoopICPBuf.push(std::pair<int, int>(7, 702));
-        scLoopICPBuf.push(std::pair<int, int>(6, 704));
-        scLoopICPBuf.push(std::pair<int, int>(5, 706));
-        scLoopICPBuf.push(std::pair<int, int>(4, 708));
-        mBuf.unlock();
-        handmadeLoopClosureFlage += 1;
-        cout << "Loop pair matched under 350 idx" << handmadeLoopClosureFlage << endl;
     }
     // cout << handmadeLoopClosureFlage << endl; ICPPassedPair.push_back(std::make_pair(_loop_kf_idx, _curr_kf_idx));
 }
@@ -958,7 +948,7 @@ void process_isam(void)
         if( gtSAMgraphMade ) {
             mtxPosegraph.lock();
             runISAM2opt();
-            // cout << "running isam2 optimization ..." << endl;
+            cout << "running isam2 optimization ..." << endl;
             mtxPosegraph.unlock();
 
             saveOptimizedVerticesKITTIformat(isamCurrentEstimate, pgKITTIformat); // pose
@@ -1003,6 +993,7 @@ void process_viz_map(void)
         if(recentIdxUpdated > 1) {
             pubMap();
             visualizeConstraint();
+            visualizeHandlc();
         }
     }
 } // pointcloud_viz
@@ -1068,6 +1059,7 @@ int main(int argc, char **argv)
 
 	pubLoopScanLocal = nh.advertise<sensor_msgs::PointCloud2>("/loop_scan_local", 100);
 	pubLoopSubmapLocal = nh.advertise<sensor_msgs::PointCloud2>("/loop_submap_local", 100);
+    // pubLoopIcpResult = nh.advertise<sensor_msgs::PointCloud2>("/loop_icpResult", 100);
 
     pubConstraintEdge = nh.advertise<visualization_msgs::MarkerArray>("/sc_match_constraints", 10);
     pubHandlc = nh.advertise<visualization_msgs::MarkerArray>("/hand_lc_point", 10);
