@@ -26,6 +26,9 @@
 #include <pcl/octree/octree_pointcloud_voxelcentroid.h>
 #include <pcl/filters/crop_box.h> 
 #include <pcl_conversions/pcl_conversions.h>
+#include <pcl/filters/statistical_outlier_removal.h>
+#include <pcl/filters/passthrough.h>
+#include <pcl/segmentation/sac_segmentation.h>
 
 #include <pcl/keypoints/iss_3d.h>
 #include <pcl/features/normal_3d.h>
@@ -143,7 +146,7 @@ double gpsAltitudeInitOffset = 0.0;
 double recentOptimizedX = 0.0;
 double recentOptimizedY = 0.0;
 
-ros::Publisher pubMapAftPGO, pubOdomAftPGO, pubPathAftPGO, pubKeypoint;
+ros::Publisher pubMapAftPGO, pubOdomAftPGO, pubPathAftPGO, pubKeyPoint, pubKeyPointMap;
 ros::Publisher pubLoopScanLocal, pubLoopSubmapLocal, pubConstraintEdge, pubHandlc, pubLoopIcpResult;//, pubLoopIcpResult;
 ros::Publisher pubOdomRepubVerifier;
 
@@ -442,7 +445,7 @@ void updatePoses(void)
     recentOptimizedX = lastOptimizedPose.translation().x();
     recentOptimizedY = lastOptimizedPose.translation().y();
 
-    recentIdxUpdated = int(keyframePosesUpdated.size()) - 1;
+    // recentIdxUpdated = int(keyframePosesUpdated.size()) - 1;
 
     mtxRecentPose.unlock();
 } // updatePoses
@@ -655,6 +658,8 @@ void process_pg()
 
             scManager.makeAndSaveScancontextAndKeys(*thisKeyFrameDS);
 
+            recentIdxUpdated = int(keyframePosesUpdated.size()) - 1;
+
             laserCloudMapPGORedraw = true;
             mKF.unlock(); 
 
@@ -748,97 +753,170 @@ float ISS_NonMaxRadius = 6;
 float ISS_Gamma21 = 0.9;
 float ISS_Gamma23 = 0.9;
 int ISS_MinNeighbors = 50;
-// int cloud_surround_node_idx = 0;
+int Local_term = 10;
+// int Local_term_a = recentIdxUpdated - (Local_term/4);
+// int Local_term_b = Local_term_a * 2;
 
-// void surround_keypoint_detection(void){
-//     laserCloudLocal->clear();
+pcl::PointXYZ pointToPCL(const Pose6D& pose)
+{
+    pcl::PointXYZ pcl_point;
+    pcl_point.x = pose.x;
+    pcl_point.y = pose.y;
+    pcl_point.z = pose.z;
+    return pcl_point;
+}
 
-//     mKF.lock(); 
-//     // for (int node_idx=0; node_idx < int(keyframePosesUpdated.size()); node_idx++) {
-//     for (int node_idx=0; node_idx < recentIdxUpdated; node_idx++) {
-//         *laserCloudLocal += *local2global(keyframeLaserClouds[node_idx], keyframePosesUpdated[node_idx]);
-//     }
-//     mKF.unlock(); 
+double calculateDistance(const pcl::PointXYZ& point1, const pcl::PointXYZ& point2)
+{
+    double dx = point1.x - point2.x;
+    double dy = point1.y - point2.y;
+    double dz = point1.z - point2.z;
+    return std::sqrt(dx * dx + dy * dy + dz * dz);
+}
 
+void surround_keypoint_detection(void){
+    cout << "[surround_keypoint_detection] process..." << endl;
+    laserCloudLocal->clear();
+    // std::vector<Pose6D>
+    // double min_dist = 100000.0;
+    // double radius = 1.0;
+    mKF.lock();
+    // Pose6D pointA = keyframePosesUpdated[recentIdxUpdated - Local_term];
+    // Pose6D pointB = keyframePosesUpdated[recentIdxUpdated];
+
+    // pcl::PointXYZ pclPointA = pointToPCL(pointA);
+    // pcl::PointXYZ pclPointB = pointToPCL(pointB);
+    pcl::PointXYZ pclCenterPoint = pointToPCL(keyframePosesUpdated[recentIdxUpdated - (Local_term/2)]);
+    
+    // for (int node_idx=0; node_idx < int(keyframePosesUpdated.size()); node_idx++) {
+    for (int node_idx = int(recentIdxUpdated - Local_term); node_idx < recentIdxUpdated; node_idx++) {
+        *laserCloudLocal += *local2global(keyframeLaserClouds[node_idx], keyframePosesUpdated[node_idx]);
+        // pcl::PointXYZ pclPointC = pointToPCL(keyframePosesUpdated[node_idx]);
+        // double distanceAC = calculateDistance(pclPointA, pclPointC);
+        // double distanceBC = calculateDistance(pclPointB, pclPointC);
+        // double difference = distanceAC - distanceBC;
+        // if (difference < min_dist){
+        //     min_dist = difference;
+        //     radius = std::min(distanceAC,distanceBC);
+        //     pclCenterPoint = pclPointC;
+        // }
+    }
+
+    mKF.unlock();
+    // 오브젝트 생성 
+    pcl::PassThrough<PointType> pass;
+    pass.setInputCloud (laserCloudLocal);
+    pass.setFilterFieldName ("x");
+    pass.setFilterLimits (pclCenterPoint.x - 20.0, pclCenterPoint.x + 20.0);
+    pass.filter (*laserCloudLocal);
+
+    pass.setFilterFieldName ("y");
+    pass.setFilterLimits (pclCenterPoint.y - 20.0, pclCenterPoint.y + 20.0);
+    pass.filter (*laserCloudLocal);
+
+    pass.setFilterFieldName ("z");
+    pass.setFilterLimits (pclCenterPoint.z - 5.0, pclCenterPoint.z + 5.0);
+    pass.filter (*laserCloudLocal);
+
+    // Create the filtering object
+    // pcl::StatisticalOutlierRemoval<PointType> sor;
+    // sor.setInputCloud (laserCloudLocal);
+    // sor.setMeanK (50);
+    // sor.setStddevMulThresh (2.0);
+        // sor.filter (*laserCloudLocal);
+
+    downSizeFilterLocal.setLeafSize(0.1, 0.1, 0.1);
+    downSizeFilterLocal.setInputCloud(laserCloudLocal);
+    downSizeFilterLocal.filter(*laserCloudLocal);
+    
 //     pcl::PointCloud<PointType>::Ptr cloud(new pcl::PointCloud<PointType>);
-// 	pcl::PointCloud<PointType>::Ptr keypoints(new pcl::PointCloud<PointType>);
+	pcl::PointCloud<PointType>::Ptr keypoints(new pcl::PointCloud<PointType>);
 //     // pcl::fromROSMsg(*laserCloudLocal, *cloud);
 
-//     // std::string curr_node_idx_str = padZeros(cloud_surround_node_idx);
-//     // pcl::io::savePCDFileBinary(pgLocalScansDirectory + curr_node_idx_str + ".pcd", *cloud); // scan save
-//     // cloud_surround_node_idx++;
+    // std::string curr_node_idx_str = padZeros(cloud_surround_node_idx);
+    // pcl::io::savePCDFileBinary(pgLocalScansDirectory + curr_node_idx_str + ".pcd", *cloud); // scan save
+    // cloud_surround_node_idx++;
 
-//     // ISS keypoint detector object.
-// 	pcl::ISSKeypoint3D<PointType, PointType> detector;
-// 	detector.setInputCloud(cloud);
-// 	pcl::search::KdTree<PointType>::Ptr kdtree(new pcl::search::KdTree<PointType>);
-// 	detector.setSearchMethod(kdtree);
-// 	// double resolution = computeCloudResolution(cloud);
-// 	// Set the radius of the spherical neighborhood used to compute the scatter matrix.
-// 	detector.setSalientRadius(ISS_SalientRadius * 0.2);
-// 	// Set the radius for the application of the non maxima supression algorithm.
-// 	detector.setNonMaxRadius(ISS_NonMaxRadius * 0.2);
-// 	// Set the minimum number of neighbors that has to be found while applying the non maxima suppression algorithm.
-// 	detector.setMinNeighbors(ISS_MinNeighbors);
-// 	// Set the upper bound on the ratio between the second and the first eigenvalue.
-// 	detector.setThreshold21(ISS_Gamma21);
-// 	// Set the upper bound on the ratio between the third and the second eigenvalue.
-// 	detector.setThreshold32(ISS_Gamma23);
-// 	// Set the number of prpcessing threads to use. 0 sets it to automatic.
-// 	detector.setNumberOfThreads(4);
+    // ISS keypoint detector object.
+	pcl::ISSKeypoint3D<PointType, PointType> detector;
+	detector.setInputCloud(laserCloudLocal);
+	pcl::search::KdTree<PointType>::Ptr kdtree(new pcl::search::KdTree<PointType>);
+	detector.setSearchMethod(kdtree);
+	// double resolution = computeCloudResolution(cloud);
+	// Set the radius of the spherical neighborhood used to compute the scatter matrix.
+	detector.setSalientRadius(ISS_SalientRadius * 0.2);
+	// Set the radius for the application of the non maxima supression algorithm.
+	detector.setNonMaxRadius(ISS_NonMaxRadius * 0.2);
+	// Set the minimum number of neighbors that has to be found while applying the non maxima suppression algorithm.
+	detector.setMinNeighbors(ISS_MinNeighbors);
+	// Set the upper bound on the ratio between the second and the first eigenvalue.
+	detector.setThreshold21(ISS_Gamma21);
+	// Set the upper bound on the ratio between the third and the second eigenvalue.
+	detector.setThreshold32(ISS_Gamma23);
+	// Set the number of prpcessing threads to use. 0 sets it to automatic.
+	detector.setNumberOfThreads(4);
 
-//     // detector.setNormalRadius(5.0);
-//     // detector.setBorderRadius(5.0);
+    // detector.setNormalRadius(5.0);
+    // detector.setBorderRadius(5.0);
 
-// 	detector.compute(*keypoints);
-//     cout << "Keypoint's num : " << keypoints->points.size() << endl;
+	detector.compute(*keypoints);
+    cout << "Keypoint's num : " << keypoints->points.size() << endl;
 
-//     // pcl::PointCloud<pcl::Normal>::Ptr normals(new pcl::PointCloud<pcl::Normal>);
-//     // pcl::PointCloud<pcl::SHOT352>::Ptr descriptors(new pcl::PointCloud<pcl::SHOT352>()); // 352 size vector descriptor
-//     // // pcl::PointCloud<pcl::FPFHSignature33>::Ptr descriptors(new pcl::PointCloud<pcl::FPFHSignature33>());
+    pcl::PointCloud<pcl::Normal>::Ptr normals(new pcl::PointCloud<pcl::Normal>);
+    pcl::PointCloud<pcl::SHOT352>::Ptr descriptors(new pcl::PointCloud<pcl::SHOT352>()); // 352 size vector descriptor
+    // pcl::PointCloud<pcl::FPFHSignature33>::Ptr descriptors(new pcl::PointCloud<pcl::FPFHSignature33>());
 	
-// 	// // Estimate the normals.
-// 	// pcl::NormalEstimation<PointType, pcl::Normal> normalEstimation;
-//     // normalEstimation.setInputCloud(cloud);
-//     // normalEstimation.setKSearch(50);
-//     // // normalEstimation.setRadiusSearch(5.0);
-// 	// kdtree.reset(new pcl::search::KdTree<PointType>);
-// 	// normalEstimation.setSearchMethod(kdtree);
-// 	// normalEstimation.compute(*normals);
+	// Estimate the normals.
+	pcl::NormalEstimation<PointType, pcl::Normal> normalEstimation;
+    normalEstimation.setInputCloud(laserCloudLocal);
+    normalEstimation.setKSearch(50);
+    // normalEstimation.setRadiusSearch(5.0);
+	kdtree.reset(new pcl::search::KdTree<PointType>);
+	normalEstimation.setSearchMethod(kdtree);
+	normalEstimation.compute(*normals);
 
-//     // // SHOT estimation object.
-// 	// pcl::SHOTEstimation<PointType, pcl::Normal, pcl::SHOT352> shot;
-//     // shot.setInputCloud(keypoints);
-// 	// shot.setInputNormals(normals);
-// 	// // The radius that defines which of the keypoint's neighbors are described.
-// 	// // If too large, there may be clutter, and if too small, not enough points may be found.
-//     // shot.setSearchMethod (kdtree);
-//     // shot.setRadiusSearch(3.0);
-//     // shot.compute(*descriptors);
+    // SHOT estimation object.
+	pcl::SHOTEstimation<PointType, pcl::Normal, pcl::SHOT352> shot;
+    shot.setInputCloud(keypoints);
+	shot.setInputNormals(normals);
+	// The radius that defines which of the keypoint's neighbors are described.
+	// If too large, there may be clutter, and if too small, not enough points may be found.
+    shot.setSearchMethod (kdtree);
+    shot.setRadiusSearch(3.0);
+    shot.compute(*descriptors);
 
-//     // // SHOT 디스크립터 출력
-//     // for (size_t i = 0; i < descriptors->points.size(); ++i) {
-//     //     pcl::SHOT352 descriptor = descriptors->points[i];
-//     //     cout << "SHOT Descriptor " << i << ": ";
-//     //     for (size_t j = 0; j < 352; ++j) {
-//     //         cout << descriptor.descriptor[j] << " ";
-//     //     }
-//     //     cout << std::endl;
-//     // }
+    // SHOT 디스크립터 출력
+    for (size_t i = 0; i < descriptors->points.size(); ++i) {
+        pcl::SHOT352 descriptor = descriptors->points[i];
+        cout << "SHOT Descriptor " << i << ": ";
+        for (size_t j = 0; j < 352; ++j) {
+            cout << descriptor.descriptor[j] << " ";
+        }
+        cout << std::endl;
+    }
 
-//     // sensor_msgs::PointCloud2 KeypointMsg;
-//     // pcl::toROSMsg(*keypoints, KeypointMsg);
-//     // KeypointMsg.header.frame_id = "/camera_init";
-//     // pubKeypoint.publish(KeypointMsg);
-// } // 
+    sensor_msgs::PointCloud2 KeypointMsg;
+    pcl::toROSMsg(*keypoints, KeypointMsg);
+    KeypointMsg.header.frame_id = "/camera_init";
+    pubKeyPoint.publish(KeypointMsg);
 
+    sensor_msgs::PointCloud2 KeypointMapMsg;
+    pcl::toROSMsg(*laserCloudLocal, KeypointMapMsg);
+    KeypointMapMsg.header.frame_id = "/camera_init";
+    pubKeyPointMap.publish(KeypointMapMsg);
+} // 
+
+int recentIdxprocessed = Local_term;
 void process_keypoints(void){
-    float loopClosureFrequency = 1.0; // can change 
+    float loopClosureFrequency = 5.0; // can change 
     ros::Rate rate(loopClosureFrequency);
     while (ros::ok()){
         rate.sleep();
         cout << "[process_keypoints] recentIdxUpdated: " << recentIdxUpdated << endl;
-        // surround_keypoint_detection();
+        if (recentIdxprocessed < recentIdxUpdated) {
+            recentIdxprocessed = recentIdxUpdated;
+            surround_keypoint_detection();
+        }
     }
 }
 
@@ -1015,6 +1093,7 @@ int main(int argc, char **argv)
     float filter_size = 0.4; 
     downSizeFilterScancontext.setLeafSize(filter_size, filter_size, filter_size);
     downSizeFilterICP.setLeafSize(filter_size, filter_size, filter_size);
+    
 
     double mapVizFilterSize;
 	nh.param<double>("mapviz_filter_size", mapVizFilterSize, 0.4); // pose assignment every k frames 
@@ -1029,7 +1108,8 @@ int main(int argc, char **argv)
 	pubOdomRepubVerifier = nh.advertise<nav_msgs::Odometry>("/repub_odom", 100);
 	pubPathAftPGO = nh.advertise<nav_msgs::Path>("/aft_pgo_path", 100);
 	pubMapAftPGO = nh.advertise<sensor_msgs::PointCloud2>("/aft_pgo_map", 100);
-    pubKeypoint = nh.advertise<sensor_msgs::PointCloud2>("/aft_keypoint", 100);
+    pubKeyPoint = nh.advertise<sensor_msgs::PointCloud2>("/LGM_keypoint", 100);
+    pubKeyPointMap = nh.advertise<sensor_msgs::PointCloud2>("/LGM_keypoint_Map", 100);
 
 	pubLoopScanLocal = nh.advertise<sensor_msgs::PointCloud2>("/loop_scan_local", 100);
 	pubLoopSubmapLocal = nh.advertise<sensor_msgs::PointCloud2>("/loop_submap_local", 100);
