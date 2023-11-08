@@ -137,6 +137,8 @@ std::mutex mtxRecentPose;
 pcl::PointCloud<PointType>::Ptr laserCloudMapPGO(new pcl::PointCloud<PointType>());
 pcl::PointCloud<PointType>::Ptr laserCloudLocal(new pcl::PointCloud<PointType>());
 pcl::PointCloud<PointType>::Ptr keypoints(new pcl::PointCloud<PointType>);
+pcl::PointCloud<pcl::PointXYZRGB>::Ptr keypointsRGB(new pcl::PointCloud<pcl::PointXYZRGB>);
+// std::vector<pcl::PointCloud<pcl::PointXYZRGB>::Ptr> keypointsVector;
 pcl::VoxelGrid<PointType> downSizeFilterMapPGO;
 pcl::VoxelGrid<PointType> downSizeFilterLocal;
 bool laserCloudMapPGORedraw = true;
@@ -756,10 +758,10 @@ float ISS_SalientRadius = 10;
 float ISS_NonMaxRadius = 6;
 float ISS_Gamma21 = 0.9;
 float ISS_Gamma23 = 0.9;
-int ISS_MinNeighbors = 50;
-int Local_term = 10;
-// int Local_term_a = recentIdxUpdated - (Local_term/4);
-// int Local_term_b = Local_term_a * 2;
+int ISS_MinNeighbors = 10;
+int Local_map_idx = 10;
+float Local_map_boundary = 30.0;
+pcl::PointXYZ lastCenterPoint = pcl::PointXYZ(0, 0, 0);
 
 pcl::PointXYZ pointToPCL(const Pose6D& pose)
 {
@@ -780,66 +782,44 @@ double calculateDistance(const pcl::PointXYZ& point1, const pcl::PointXYZ& point
 
 void surround_keypoint_detection(void){
     cout << "[surround_keypoint_detection] process..." << endl;
+    // LocalCloud 초기화
     laserCloudLocal->clear();
-    // std::vector<Pose6D>
-    // double min_dist = 100000.0;
-    // double radius = 1.0;
+
+    // Local_map_idx(키프레임 범위) 범위 중 중간 keyframe 인덱스 기준으로 Local_map_boundary만큼 크롭 -> LocalCloud에 저장
     mKF.lock();
-    // Pose6D pointA = keyframePosesUpdated[recentIdxUpdated - Local_term];
-    // Pose6D pointB = keyframePosesUpdated[recentIdxUpdated];
+    pcl::PointXYZ pclCenterPoint = pointToPCL(keyframePosesUpdated[recentIdxUpdated - (Local_map_idx/2)]);
 
-    // pcl::PointXYZ pclPointA = pointToPCL(pointA);
-    // pcl::PointXYZ pclPointB = pointToPCL(pointB);
-    pcl::PointXYZ pclCenterPoint = pointToPCL(keyframePosesUpdated[recentIdxUpdated - (Local_term/2)]);
-    
-    // for (int node_idx=0; node_idx < int(keyframePosesUpdated.size()); node_idx++) {
-    for (int node_idx = int(recentIdxUpdated - Local_term); node_idx < recentIdxUpdated; node_idx++) {
+    // if (calculateDistance(lastCenterPoint, pclCenterPoint) < 15.0){
+    //     mKF.unlock();
+    //     return;
+    // }
+    // lastCenterPoint = pclCenterPoint;
+
+    for (int node_idx = int(recentIdxUpdated - Local_map_idx); node_idx < recentIdxUpdated; node_idx++) {
         *laserCloudLocal += *local2global(keyframeLaserClouds[node_idx], keyframePosesUpdated[node_idx]);
-        // pcl::PointXYZ pclPointC = pointToPCL(keyframePosesUpdated[node_idx]);
-        // double distanceAC = calculateDistance(pclPointA, pclPointC);
-        // double distanceBC = calculateDistance(pclPointB, pclPointC);
-        // double difference = distanceAC - distanceBC;
-        // if (difference < min_dist){
-        //     min_dist = difference;
-        //     radius = std::min(distanceAC,distanceBC);
-        //     pclCenterPoint = pclPointC;
-        // }
     }
-
     mKF.unlock();
+
     // 오브젝트 생성 
     pcl::PassThrough<PointType> pass;
     pass.setInputCloud (laserCloudLocal);
     pass.setFilterFieldName ("x");
-    pass.setFilterLimits (pclCenterPoint.x - 30.0, pclCenterPoint.x + 30.0);
+    pass.setFilterLimits (pclCenterPoint.x - Local_map_boundary, pclCenterPoint.x + Local_map_boundary);
     pass.filter (*laserCloudLocal);
 
     pass.setFilterFieldName ("y");
-    pass.setFilterLimits (pclCenterPoint.y - 30.0, pclCenterPoint.y + 30.0);
+    pass.setFilterLimits (pclCenterPoint.y - Local_map_boundary, pclCenterPoint.y + Local_map_boundary);
     pass.filter (*laserCloudLocal);
 
     pass.setFilterFieldName ("z");
-    pass.setFilterLimits (pclCenterPoint.z - 5.0, pclCenterPoint.z + 5.0);
+    pass.setFilterLimits (pclCenterPoint.z - 10.0, pclCenterPoint.z + 10.0);
     pass.filter (*laserCloudLocal);
-
-    // Create the filtering object
-    // pcl::StatisticalOutlierRemoval<PointType> sor;
-    // sor.setInputCloud (laserCloudLocal);
-    // sor.setMeanK (50);
-    // sor.setStddevMulThresh (2.0);
-        // sor.filter (*laserCloudLocal);
 
     downSizeFilterLocal.setLeafSize(0.05, 0.05, 0.05);
     downSizeFilterLocal.setInputCloud(laserCloudLocal);
     downSizeFilterLocal.filter(*laserCloudLocal);
-    
-//     pcl::PointCloud<PointType>::Ptr cloud(new pcl::PointCloud<PointType>);
-	
-//     // pcl::fromROSMsg(*laserCloudLocal, *cloud);
 
-    // std::string curr_node_idx_str = padZeros(cloud_surround_node_idx);
-    // pcl::io::savePCDFileBinary(pgLocalScansDirectory + curr_node_idx_str + ".pcd", *cloud); // scan save
-    // cloud_surround_node_idx++;
+    // 키포인트 추출
     pcl::PointCloud<PointType>::Ptr currkeypoints(new pcl::PointCloud<PointType>);
 
     // [] ISS keypoint 추출
@@ -860,64 +840,131 @@ void surround_keypoint_detection(void){
 	detector.setThreshold32(ISS_Gamma23);
 	// Set the number of prpcessing threads to use. 0 sets it to automatic.
 	detector.setNumberOfThreads(4);
-
-    // detector.setNormalRadius(5.0);
-    // detector.setBorderRadius(5.0);
-
 	detector.compute(*currkeypoints);
+
+    // 바운더리 근처의 키포인트는 제거
+    pass.setInputCloud (currkeypoints);
+    pass.setFilterFieldName ("x");
+    pass.setFilterLimits (pclCenterPoint.x - (2*Local_map_boundary/3), pclCenterPoint.x + (2*Local_map_boundary/3));
+    pass.filter (*currkeypoints);
+
+    pass.setFilterFieldName ("y");
+    pass.setFilterLimits (pclCenterPoint.y - (2*Local_map_boundary/3), pclCenterPoint.y + (2*Local_map_boundary/3));
+    pass.filter (*currkeypoints);
+
+    pass.setFilterFieldName ("z");
+    pass.setFilterLimits (pclCenterPoint.z - 10.0, pclCenterPoint.z + 10.0);
+    pass.filter (*currkeypoints);
+
     cout << "Keypoint's num : " << keypoints->points.size() << endl;
     *keypoints += *currkeypoints;
 
-    // [] keypoint에 대한 Euclidean 클러스터링
-    pcl::search::KdTree<PointType>::Ptr tree(new pcl::search::KdTree<PointType>);
-    tree->setInputCloud(currkeypoints);
+    // keypoints 색 칠해주기
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr outputCloud(new pcl::PointCloud<pcl::PointXYZRGB>);
+    outputCloud->width = currkeypoints->width;
+    outputCloud->height = currkeypoints->height;
+    outputCloud->is_dense = false;
+    outputCloud->points.resize(currkeypoints->points.size());
 
-    pcl::EuclideanClusterExtraction<PointType> ec;
-    ec.setClusterTolerance(0.2); // 클러스터링 허용 거리 (근처 점으로 간주할 거리)
-    ec.setMinClusterSize(1);   // 클러스터 최소 크기
-    ec.setMaxClusterSize(5); // 클러스터 최대 크기
-    ec.setSearchMethod(tree);
-    ec.setInputCloud(currkeypoints);
+    int r = std::rand() % 256;
+    int g = std::rand() % 256;
+    int b = std::rand() % 256;
 
-    std::vector<pcl::PointIndices> cluster_indices;
-    ec.extract(cluster_indices);
+    for (size_t i = 0; i < currkeypoints->points.size(); ++i)
+    {
+        pcl::PointXYZI pointI = currkeypoints->points[i];
+        pcl::PointXYZRGB pointRGB;
 
-    // [] Normal 생성
-    pcl::PointCloud<pcl::Normal>::Ptr normals(new pcl::PointCloud<pcl::Normal>);
-    pcl::PointCloud<pcl::SHOT352>::Ptr descriptors(new pcl::PointCloud<pcl::SHOT352>()); // 352 size vector descriptor
-    // pcl::PointCloud<pcl::FPFHSignature33>::Ptr descriptors(new pcl::PointCloud<pcl::FPFHSignature33>());
-	
-	// Estimate the normals.
-	pcl::NormalEstimation<PointType, pcl::Normal> normalEstimation;
-    normalEstimation.setInputCloud(laserCloudLocal);
-    normalEstimation.setKSearch(50);
-    // normalEstimation.setRadiusSearch(5.0);
-	kdtree.reset(new pcl::search::KdTree<PointType>);
-	normalEstimation.setSearchMethod(kdtree);
-	normalEstimation.compute(*normals);
+        // 인텐시티 값을 0-255 범위로 매핑
+        int intensity = static_cast<int>(pointI.intensity * 255);
 
-    // [] SHOT estimation object.
-	pcl::SHOTEstimation<PointType, pcl::Normal, pcl::SHOT352> shot;
-    shot.setInputCloud(keypoints);
-	shot.setInputNormals(normals);
-	// The radius that defines which of the keypoint's neighbors are described.
-	// If too large, there may be clutter, and if too small, not enough points may be found.
-    shot.setSearchMethod (kdtree);
-    shot.setRadiusSearch(3.0);
-    shot.compute(*descriptors);
+        // R, G, B 색상을 설정
+        pointRGB.r = r;
+        pointRGB.g = g;
+        pointRGB.b = b;
 
-    // [] SHOT 디스크립터 출력
-    for (size_t i = 0; i < descriptors->points.size(); ++i) {
-        pcl::SHOT352 descriptor = descriptors->points[i];
-        cout << "SHOT Descriptor " << i << ": ";
-        for (size_t j = 0; j < 352; ++j) {
-            cout << descriptor.descriptor[j] << " ";
-        }
-        cout << std::endl;
+        pointRGB.x = pointI.x;
+        pointRGB.y = pointI.y;
+        pointRGB.z = pointI.z;
+
+        outputCloud->points[i] = pointRGB;
     }
 
+    *keypointsRGB += *outputCloud;
+
+    // 클러스터 추출 파라미터 설정
+    // pcl::search::KdTree<PointType>::Ptr tree(new pcl::search::KdTree<PointType>);
+    // tree->setInputCloud(keypoints);
+
+    // std::vector<pcl::PointIndices> cluster_indices;
+    // pcl::EuclideanClusterExtraction<PointType> ec;
+    // ec.setClusterTolerance(1.0); // 클러스터의 거리 허용 오차 (조절 가능)
+    // ec.setMinClusterSize(1);    // 클러스터의 최소 크기 (조절 가능)
+    // ec.setMaxClusterSize(100);  // 클러스터의 최대 크기 (조절 가능)
+    // ec.setSearchMethod(tree);
+    // ec.setInputCloud(keypoints);
+    // ec.extract(cluster_indices);
+
+    // currkeypoints->clear();
+
+    // // 각 클러스터의 중심점을 찾고 추출
+    // for (std::vector<pcl::PointIndices>::const_iterator it = cluster_indices.begin(); it != cluster_indices.end(); ++it) {
+    //     pcl::PointCloud<PointType>::Ptr cluster(new pcl::PointCloud<PointType>);
+
+    //     for (std::vector<int>::const_iterator pit = it->indices.begin(); pit != it->indices.end(); ++pit) {
+    //         cluster->points.push_back(keypoints->points[*pit]);
+    //     }
+
+    //     // 중심점 계산
+    //     Eigen::Vector4f centroid;
+    //     pcl::compute3DCentroid(*cluster, centroid);
+        
+    //     PointType cluster_center;
+    //     cluster_center.x = centroid[0];
+    //     cluster_center.y = centroid[1];
+    //     cluster_center.z = centroid[2];
+        
+    //     currkeypoints->push_back(cluster_center);
+    // }
+    // keypoints = currkeypoints;
+
+
+    // // [] Normal 생성
+    // pcl::PointCloud<pcl::Normal>::Ptr normals(new pcl::PointCloud<pcl::Normal>);
+    // pcl::PointCloud<pcl::SHOT352>::Ptr descriptors(new pcl::PointCloud<pcl::SHOT352>()); // 352 size vector descriptor
+    // // pcl::PointCloud<pcl::FPFHSignature33>::Ptr descriptors(new pcl::PointCloud<pcl::FPFHSignature33>());
+	
+	// // Estimate the normals.
+	// pcl::NormalEstimation<PointType, pcl::Normal> normalEstimation;
+    // normalEstimation.setInputCloud(laserCloudLocal);
+    // normalEstimation.setKSearch(50);
+    // // normalEstimation.setRadiusSearch(5.0);
+	// kdtree.reset(new pcl::search::KdTree<PointType>);
+	// normalEstimation.setSearchMethod(kdtree);
+	// normalEstimation.compute(*normals);
+
+    // // [] SHOT estimation object.
+	// pcl::SHOTEstimation<PointType, pcl::Normal, pcl::SHOT352> shot;
+    // shot.setInputCloud(keypoints);
+	// shot.setInputNormals(normals);
+	// // The radius that defines which of the keypoint's neighbors are described.
+	// // If too large, there may be clutter, and if too small, not enough points may be found.
+    // shot.setSearchMethod (kdtree);
+    // shot.setRadiusSearch(3.0);
+    // shot.compute(*descriptors);
+
+    // // [] SHOT 디스크립터 출력
+    // for (size_t i = 0; i < descriptors->points.size(); ++i) {
+    //     pcl::SHOT352 descriptor = descriptors->points[i];
+    //     cout << "SHOT Descriptor " << i << ": ";
+    //     for (size_t j = 0; j < 352; ++j) {
+    //         cout << descriptor.descriptor[j] << " ";
+    //     }
+    //     cout << std::endl;
+    // }
+
     sensor_msgs::PointCloud2 KeypointMsg;
-    pcl::toROSMsg(*keypoints, KeypointMsg);
+    pcl::toROSMsg(*keypointsRGB, KeypointMsg);
     KeypointMsg.header.frame_id = "/camera_init";
     pubKeyPoint.publish(KeypointMsg);
 
@@ -925,9 +972,9 @@ void surround_keypoint_detection(void){
     pcl::toROSMsg(*laserCloudLocal, KeypointMapMsg);
     KeypointMapMsg.header.frame_id = "/camera_init";
     pubKeyPointMap.publish(KeypointMapMsg);
-} // 
+} 
 
-int recentIdxprocessed = Local_term;
+int recentIdxprocessed = Local_map_idx;
 void process_keypoints(void){
     float loopClosureFrequency = 5.0; // can change 
     ros::Rate rate(loopClosureFrequency);

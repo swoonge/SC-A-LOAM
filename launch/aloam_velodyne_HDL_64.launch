@@ -11,11 +11,11 @@
     <param name="mapping_line_resolution" type="double" value="0.1"/> <!-- A-LOAM -->
     <param name="mapping_plane_resolution" type="double" value="0.2"/> <!-- A-LOAM -->
 
-    <param name="ISS_SalientRadius" type="double" value="20"/>
-    <param name="ISS_NonMaxRadius" type="double" value="12"/>
-    <param name="ISS_Gamma21" type="double" value="0.4"/>
-    <param name="ISS_Gamma23" type="double" value="0.4"/>
-    <param name="ISS_MinNeighbors" type="int" value="50"/>
+    <param name="ISS_SalientRadius" type="double" value="10"/>
+    <param name="ISS_NonMaxRadius" type="double" value="15"/>
+    <param name="ISS_Gamma21" type="double" value="0.8"/>
+    <param name="ISS_Gamma23" type="double" value="0.8"/>
+    <param name="ISS_MinNeighbors" type="int" value="30"/>
 
 
     <!-- SC-A-LOAM -->
