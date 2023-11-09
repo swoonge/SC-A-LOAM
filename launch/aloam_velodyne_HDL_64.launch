@@ -13,9 +13,9 @@
 
     <param name="ISS_SalientRadius" type="double" value="10"/>
     <param name="ISS_NonMaxRadius" type="double" value="15"/>
-    <param name="ISS_Gamma21" type="double" value="0.8"/>
-    <param name="ISS_Gamma23" type="double" value="0.8"/>
-    <param name="ISS_MinNeighbors" type="int" value="30"/>
+    <param name="ISS_Gamma21" type="double" value="0.97"/>
+    <param name="ISS_Gamma23" type="double" value="0.97"/>
+    <param name="ISS_MinNeighbors" type="int" value="10"/>
 
 
     <!-- SC-A-LOAM -->

@@ -7,7 +7,7 @@ Panels:
         - /Global Options1
         - /pgoOdom1/Shape1
         - /MarkerArray1/Namespaces1
-        - /PointCloud22
+        - /PointCloud21
       Splitter Ratio: 0.4882352948188782
     Tree Height: 719
   - Class: rviz/Selection
@@ -553,7 +553,7 @@ Visualization Manager:
       Channel Name: intensity
       Class: rviz/PointCloud2
       Color: 85; 87; 83
-      Color Transformer: FlatColor
+      Color Transformer: RGB8
       Decay Time: 0
       Enabled: true
       Invert Rainbow: false
@@ -627,7 +627,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/ThirdPersonFollower
-      Distance: 10
+      Distance: 43.13401412963867
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -635,17 +635,17 @@ Visualization Manager:
         Value: false
       Field of View: 0.7853981852531433
       Focal Point:
-        X: 0
-        Y: 0
+        X: 20.6383113861084
+        Y: 4.369909763336182
         Z: 0
       Focal Shape Fixed Size: false
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.7853981852531433
+      Pitch: 0.9803981781005859
       Target Frame: aft_pgo
-      Yaw: 0.7853981852531433
+      Yaw: 1.7253974676132202
     Saved: ~
 Window Geometry:
   Displays:
