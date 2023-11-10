@@ -31,6 +31,7 @@
 #include <pcl/segmentation/sac_segmentation.h>
 #include <pcl/segmentation/extract_clusters.h>
 #include <pcl/features/normal_3d_omp.h>
+#include <pcl/segmentation/region_growing.h>
 
 #include <pcl/keypoints/iss_3d.h>
 #include <pcl/features/normal_3d.h>
@@ -138,7 +139,8 @@ pcl::PointCloud<PointType>::Ptr laserCloudMapPGO(new pcl::PointCloud<PointType>(
 pcl::PointCloud<PointType>::Ptr laserCloudLocal(new pcl::PointCloud<PointType>());
 pcl::PointCloud<PointType>::Ptr keypoints(new pcl::PointCloud<PointType>);
 pcl::PointCloud<pcl::PointXYZRGB>::Ptr keypointsRGB(new pcl::PointCloud<pcl::PointXYZRGB>);
-pcl::PointCloud<PointType>::Ptr keypointsMap(new pcl::PointCloud<PointType>());
+// pcl::PointCloud<PointType>::Ptr keypointsMap(new pcl::PointCloud<PointType>());
+pcl::PointCloud<PointType>::Ptr globalkeypointvis(new pcl::PointCloud<PointType>);
 std::vector<pcl::PointCloud<PointType>::Ptr> keypointsVector;
 pcl::VoxelGrid<PointType> downSizeFilterMapPGO;
 pcl::VoxelGrid<PointType> downSizeFilterLocal;
@@ -835,9 +837,9 @@ void surround_keypoint_detection( int Idx ){
     pass.setFilterLimits (pclCenterPoint.z - 10.0, pclCenterPoint.z + 10.0);
     pass.filter (*laserCloudLocal);
 
-    downSizeFilterLocal.setLeafSize(0.05, 0.05, 0.05);
-    downSizeFilterLocal.setInputCloud(laserCloudLocal);
-    downSizeFilterLocal.filter(*laserCloudLocal);
+    // downSizeFilterLocal.setLeafSize(0.05, 0.05, 0.05);
+    // downSizeFilterLocal.setInputCloud(laserCloudLocal);
+    // downSizeFilterLocal.filter(*laserCloudLocal);
 
     // 키포인트 추출
     pcl::PointCloud<PointType>::Ptr currkeypoints(new pcl::PointCloud<PointType>);
@@ -882,7 +884,9 @@ void surround_keypoint_detection( int Idx ){
     keypointsVector.push_back(currkeypoints);
 
 
-    // 클러스터 추출 파라미터 설정
+
+
+    // // 클러스터 추출 파라미터 설정
     // pcl::search::KdTree<PointType>::Ptr tree(new pcl::search::KdTree<PointType>);
     // tree->setInputCloud(keypoints);
 
@@ -1036,8 +1040,7 @@ void process_viz_path(void)
         if(recentIdxUpdated > 1) {
             pubPath();
         }
-    }
-    
+    }   
 }
 
 void process_isam(void)
@@ -1059,22 +1062,16 @@ void process_isam(void)
     }
 }
 
-int keypoint_r = std::rand() % (256);
-int keypoint_g = std::rand() % (256);
-int keypoint_b = std::rand() % (256);
-int r_margin = 30;
-int g_margin = 30;
-int b_margin = 30;
-pcl::PointCloud<PointType>::Ptr globalkeypointvis(new pcl::PointCloud<PointType>);
+
 
 void pubMap(void)
 {
-    
     int SKIP_FRAMES = 1; // sparse map visulalization to save computations 
     int counter = 0;
 
     laserCloudMapPGO->clear();
     keypointsRGB->clear();
+    globalkeypointvis->clear();
 
     mKF.lock(); 
     for (int node_idx=0; node_idx < recentIdxUpdated; node_idx++) {
@@ -1083,60 +1080,57 @@ void pubMap(void)
         }
         counter++;
     }
+    for (int node_idx=Local_map_idx; node_idx < keypointsVector.size(); node_idx++) {
+        *globalkeypointvis += *local2global(keypointsVector[node_idx], keyframePosesUpdated[node_idx]);
+    }
     mKF.unlock(); 
 
     downSizeFilterMapPGO.setInputCloud(laserCloudMapPGO);
     downSizeFilterMapPGO.filter(*laserCloudMapPGO);
 
-    globalkeypointvis->clear();
-    
-    mKF.lock(); 
-    for (int node_idx=Local_map_idx; node_idx < keypointsVector.size(); node_idx++) {
-        globalkeypointvis->clear();
-        *globalkeypointvis += *local2global(keypointsVector[node_idx], keyframePosesUpdated[node_idx]);
-        // keypoints 색 칠해주기
-        pcl::PointCloud<pcl::PointXYZRGB>::Ptr outputCloud(new pcl::PointCloud<pcl::PointXYZRGB>);
-        outputCloud->width = globalkeypointvis->width;
-        outputCloud->height = globalkeypointvis->height;
-        outputCloud->is_dense = false;
-        outputCloud->points.resize(globalkeypointvis->points.size());
+    pcl::search::KdTree<PointType>::Ptr tree (new pcl::search::KdTree<PointType>);
+    tree->setInputCloud (globalkeypointvis);
 
-        if ((keypoint_r > 255) || (keypoint_r < 0)){
-            r_margin = -1 * r_margin;
-        }
-        if ((keypoint_g > 255) || (keypoint_g < 0)){
-            g_margin = -1 * g_margin;
-        }
-        if ((keypoint_b > 255) || (keypoint_b < 0)){
-            b_margin = -1 * b_margin;
-        }
-        keypoint_r += r_margin;
-        keypoint_g += g_margin;
-        keypoint_b += b_margin;
+    std::vector<pcl::PointIndices> cluster_indices;
 
-        for (size_t i = 0; i < globalkeypointvis->points.size(); ++i)
-        {
-            pcl::PointXYZI pointI = globalkeypointvis->points[i];
+    pcl::EuclideanClusterExtraction<PointType> ec;
+    ec.setClusterTolerance (0.5);
+    ec.setMinClusterSize (12);
+    ec.setMaxClusterSize (25000);
+    ec.setSearchMethod (tree);
+    ec.setInputCloud (globalkeypointvis);
+    ec.extract (cluster_indices);
+
+    keypointsRGB->width = globalkeypointvis->width;
+    keypointsRGB->height = globalkeypointvis->height;
+    keypointsRGB->is_dense = false;
+    keypointsRGB->points.resize(globalkeypointvis->points.size());
+
+    // 각 클러스터에 랜덤 색상 부여
+    for (const auto& cluster : cluster_indices) {
+        // 클러스터 내의 각 인덱스에 대해 작업
+        int r = rand() % 256;
+        int g = rand() % 256;
+        int b = rand() % 256;
+        for (const auto& idx : cluster.indices) {
+            pcl::PointXYZI pointI = globalkeypointvis->points[idx];
             pcl::PointXYZRGB pointRGB;
 
             // 인텐시티 값을 0-255 범위로 매핑
             int intensity = static_cast<int>(pointI.intensity * 255);
 
             // R, G, B 색상을 설정
-            pointRGB.r = keypoint_r;
-            pointRGB.g = keypoint_g;
-            pointRGB.b = keypoint_b;
+            pointRGB.r = r;
+            pointRGB.g = g;
+            pointRGB.b = b;
 
             pointRGB.x = pointI.x;
             pointRGB.y = pointI.y;
             pointRGB.z = pointI.z;
 
-            outputCloud->points[i] = pointRGB;
+            keypointsRGB->points[idx] = pointRGB;
         }
-        *keypointsRGB += *outputCloud;
     }
-    mKF.unlock(); 
-
     sensor_msgs::PointCloud2 KeypointMsg;
     pcl::toROSMsg(*keypointsRGB, KeypointMsg);
     KeypointMsg.header.frame_id = "/camera_init";
@@ -1147,6 +1141,7 @@ void pubMap(void)
     laserCloudMapPGOMsg.header.frame_id = "/camera_init";
     pubMapAftPGO.publish(laserCloudMapPGOMsg);
 }
+
 
 void process_viz_map(void)
 {
