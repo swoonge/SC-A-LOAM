@@ -40,6 +40,7 @@
 
 #include <ros/ros.h>
 #include <sensor_msgs/Imu.h>
+#include <std_msgs/Int64.h>
 #include <sensor_msgs/PointCloud2.h>
 #include <sensor_msgs/NavSatFix.h>
 #include <tf/transform_datatypes.h>
@@ -47,6 +48,7 @@
 #include <nav_msgs/Odometry.h>
 #include <nav_msgs/Path.h>
 #include <geometry_msgs/PoseStamped.h>
+#include <aloam_velodyne/LCPair.h>
 
 #include <eigen3/Eigen/Dense>
 
@@ -158,6 +160,7 @@ double recentOptimizedY = 0.0;
 ros::Publisher pubMapAftPGO, pubOdomAftPGO, pubPathAftPGO, pubKeyPoint, pubKeyPointMap;
 ros::Publisher pubLoopScanLocal, pubLoopSubmapLocal, pubConstraintEdge, pubHandlc, pubLoopIcpResult;//, pubLoopIcpResult;
 ros::Publisher pubOdomRepubVerifier;
+ros::Publisher pubKeyFrameDS, pubDetectTrigger;
 
 std::string save_directory;
 std::string pgKITTIformat, pgScansDirectory, pgSCDsDirectory, pgLocalScansDirectory;
@@ -309,6 +312,15 @@ void gpsHandler(const sensor_msgs::NavSatFix::ConstPtr &_gps)
         mBuf.unlock();
     }
 } // gpsHandler
+
+// void LCHandler(const sensor_msgs::NavSatFix::ConstPtr &_gps)
+// {
+//     if(useGPS) {
+//         mBuf.lock();
+//         gpsBuf.push(_gps);
+//         mBuf.unlock();
+//     }
+// } // gpsHandler
 
 void initNoises( void )
 {
@@ -643,7 +655,6 @@ void process_pg()
             timeLaserOdometry = odometryBuf.front()->header.stamp.toSec();
             timeLaser = fullResBuf.front()->header.stamp.toSec();
             // TODO
-
             laserCloudFullRes->clear();
             pcl::PointCloud<PointType>::Ptr thisKeyFrame(new pcl::PointCloud<PointType>());
             pcl::fromROSMsg(*fullResBuf.front(), *thisKeyFrame);
@@ -695,6 +706,12 @@ void process_pg()
             recentIdxUpdated = int(keyframePosesUpdated.size()) - 1;
 
             laserCloudMapPGORedraw = true;
+
+            sensor_msgs::PointCloud2 thisKeyFrameDSMsg;
+            pcl::toROSMsg(*thisKeyFrameDS, thisKeyFrameDSMsg);
+            thisKeyFrameDSMsg.header.frame_id = "/camera_init";
+            pubKeyFrameDS.publish(thisKeyFrameDSMsg);
+
             mKF.unlock(); 
 
             const int prev_node_idx = keyframePoses.size() - 2; 
@@ -883,9 +900,6 @@ void surround_keypoint_detection( int Idx ){
     *currkeypoints = *global2local(currkeypoints, keyframePosesUpdated[Idx]);
     keypointsVector.push_back(currkeypoints);
 
-
-
-
     // // 클러스터 추출 파라미터 설정
     // pcl::search::KdTree<PointType>::Ptr tree(new pcl::search::KdTree<PointType>);
     // tree->setInputCloud(keypoints);
@@ -989,7 +1003,11 @@ void process_lcd(void)
     while (ros::ok())
     {
         rate.sleep();
-        performSCLoopClosure();
+        std_msgs::Int64 keyframePosesSize;
+        keyframePosesSize.data = int(keyframePoses.size());
+
+        // performSCLoopClosure();my_msgs::VectorPair
+        pubDetectTrigger.publish(keyframePosesSize);
         // handmadeLoopClosure();
 
     }
@@ -1095,7 +1113,7 @@ void pubMap(void)
 
     pcl::EuclideanClusterExtraction<PointType> ec;
     ec.setClusterTolerance (0.5);
-    ec.setMinClusterSize (12);
+    ec.setMinClusterSize (7);
     ec.setMaxClusterSize (25000);
     ec.setSearchMethod (tree);
     ec.setInputCloud (globalkeypointvis);
@@ -1155,6 +1173,14 @@ void process_viz_map(void)
     }
 } // pointcloud_viz
 
+// <aloam_velodyne/LCPair
+void LCHandler(const aloam_velodyne::LCPair::ConstPtr &_laserOdometry){
+    mBuf.lock();
+    scLoopICPBuf.push(std::pair<int, int>(_laserOdometry->a_int, _laserOdometry->b_int));
+    // addding actual 6D constraints in the other thread, icp_calculation.
+    mBuf.unlock();
+}
+
 int main(int argc, char **argv)
 {
 	ros::init(argc, argv, "laserPGO");
@@ -1206,7 +1232,7 @@ int main(int argc, char **argv)
     scManager.setSCdistThres(scDistThres);
     scManager.setMaximumRadius(scMaximumRadius);
 
-    float filter_size = 0.4; 
+    float filter_size = 0.3; 
     downSizeFilterScancontext.setLeafSize(filter_size, filter_size, filter_size);
     downSizeFilterICP.setLeafSize(filter_size, filter_size, filter_size);
     
@@ -1218,6 +1244,7 @@ int main(int argc, char **argv)
 	ros::Subscriber subLaserCloudFullRes = nh.subscribe<sensor_msgs::PointCloud2>("/velodyne_cloud_registered_local", 100, laserCloudFullResHandler);
 	ros::Subscriber subLaserOdometry = nh.subscribe<nav_msgs::Odometry>("/aft_mapped_to_init", 100, laserOdometryHandler);
 	ros::Subscriber subGPS = nh.subscribe<sensor_msgs::NavSatFix>("/gps/fix", 100, gpsHandler);
+    ros::Subscriber subLCdetectResult = nh.subscribe<aloam_velodyne::LCPair>("/LCdetectResult", 100, LCHandler); // std::pair<int, float> 가 리턴
     // ros::Subscriber subLaserCloudSurround = nh.subscribe<sensor_msgs::PointCloud2>("/laser_cloud_surround", 100, cloud_surround_Handler);
 
 	pubOdomAftPGO = nh.advertise<nav_msgs::Odometry>("/aft_pgo_odom", 100);
@@ -1226,6 +1253,9 @@ int main(int argc, char **argv)
 	pubMapAftPGO = nh.advertise<sensor_msgs::PointCloud2>("/aft_pgo_map", 100);
     pubKeyPoint = nh.advertise<sensor_msgs::PointCloud2>("/LGM_keypoint", 100);
     pubKeyPointMap = nh.advertise<sensor_msgs::PointCloud2>("/LGM_keypoint_Map", 100);
+
+    pubKeyFrameDS = nh.advertise<sensor_msgs::PointCloud2>("/KeyFrameDSforLC", 100);
+    pubDetectTrigger = nh.advertise<std_msgs::Int64>("/DetectTriggerforLC", 100);
 
 	pubLoopScanLocal = nh.advertise<sensor_msgs::PointCloud2>("/loop_scan_local", 100);
 	pubLoopSubmapLocal = nh.advertise<sensor_msgs::PointCloud2>("/loop_submap_local", 100);

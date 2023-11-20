@@ -17,6 +17,17 @@ find_package(catkin REQUIRED COMPONENTS
   image_transport
   cv_bridge
   tf
+  message_generation
+)
+
+add_message_files(
+  FILES
+  LCPair.msg
+)
+
+generate_messages(
+  DEPENDENCIES
+  std_msgs
 )
 
 #find_package(Eigen3 REQUIRED)
@@ -37,11 +48,10 @@ include_directories(
 )
 
 catkin_package(
-  CATKIN_DEPENDS geometry_msgs nav_msgs roscpp rospy std_msgs
+  CATKIN_DEPENDS geometry_msgs nav_msgs roscpp rospy std_msgs message_runtime
   DEPENDS EIGEN3 PCL 
   INCLUDE_DIRS include
 )
-
 
 add_executable(ascanRegistration src/scanRegistration.cpp)
 target_link_libraries(ascanRegistration ${catkin_LIBRARIES} ${PCL_LIBRARIES})
@@ -56,10 +66,22 @@ add_executable(alaserPGO
   src/laserPosegraphOptimization.cpp
   include/scancontext/Scancontext.cpp
 )
+add_executable(alaserScDetector 
+  src/scLoopDetector.cpp
+  include/scancontext/Scancontext.cpp
+)
 target_compile_options(alaserPGO 
   PRIVATE ${OpenMP_CXX_FLAGS}
 )
 target_link_libraries(alaserPGO 
+  ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${CERES_LIBRARIES}
+  ${OpenMP_CXX_FLAGS}
+  gtsam
+)
+target_compile_options(alaserScDetector 
+  PRIVATE ${OpenMP_CXX_FLAGS}
+)
+target_link_libraries(alaserScDetector 
   ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${CERES_LIBRARIES}
   ${OpenMP_CXX_FLAGS}
   gtsam
