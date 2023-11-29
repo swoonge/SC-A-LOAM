@@ -27,7 +27,7 @@ Panels:
   - Class: rviz/Time
     Name: Time
     SyncMode: 0
-    SyncSource: ""
+    SyncSource: pgoMap
   - Class: rviz/Views
     Expanded:
       - /Current View1
@@ -274,7 +274,7 @@ Visualization Manager:
           Color: 255; 255; 255
           Color Transformer: Intensity
           Decay Time: 0
-          Enabled: true
+          Enabled: false
           Invert Rainbow: false
           Max Color: 255; 255; 255
           Min Color: 0; 0; 0
@@ -289,7 +289,7 @@ Visualization Manager:
           Unreliable: false
           Use Fixed Frame: true
           Use rainbow: true
-          Value: true
+          Value: false
         - Angle Tolerance: 0.10000000149011612
           Class: rviz/Odometry
           Covariance:
@@ -564,8 +564,8 @@ Visualization Manager:
       Queue Size: 10
       Selectable: true
       Size (Pixels): 3
-      Size (m): 0.5
-      Style: Spheres
+      Size (m): 0.20000000298023224
+      Style: Boxes
       Topic: /LGM_keypoint
       Unreliable: false
       Use Fixed Frame: true
@@ -591,10 +591,10 @@ Visualization Manager:
       Position Transformer: XYZ
       Queue Size: 10
       Selectable: true
-      Size (Pixels): 1
-      Size (m): 0.10000000149011612
-      Style: Flat Squares
-      Topic: /LGM_keypoint_Map
+      Size (Pixels): 3
+      Size (m): 0.20000000298023224
+      Style: Boxes
+      Topic: /keyPointResult
       Unreliable: false
       Use Fixed Frame: true
       Use rainbow: true
@@ -627,7 +627,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/XYOrbit
-      Distance: 43.13401794433594
+      Distance: 45.71788024902344
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -635,17 +635,17 @@ Visualization Manager:
         Value: false
       Field of View: 0.7853981852531433
       Focal Point:
-        X: 20.6383113861084
-        Y: 4.369907379150391
-        Z: 0
-      Focal Shape Fixed Size: true
+        X: 29.125417709350586
+        Y: 13.7627534866333
+        Z: 5.499911821971182e-06
+      Focal Shape Fixed Size: false
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.9803979992866516
+      Pitch: 1.0253980159759521
       Target Frame: aft_pgo
-      Yaw: 1.7253974676132202
+      Yaw: 1.8753972053527832
     Saved: ~
 Window Geometry:
   Displays:

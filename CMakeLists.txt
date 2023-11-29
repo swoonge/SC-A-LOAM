@@ -23,11 +23,14 @@ find_package(catkin REQUIRED COMPONENTS
 add_message_files(
   FILES
   LCPair.msg
+  LocalMapAndPose.msg
 )
 
 generate_messages(
   DEPENDENCIES
   std_msgs
+  geometry_msgs
+  sensor_msgs
 )
 
 #find_package(Eigen3 REQUIRED)

@@ -13,6 +13,13 @@
 
     <param name="mapviz_filter_size" type="double" value="0.1"/>
 
+    <param name="LocalMapBoundary" type="float" value="30.0"/>
+    <param name="ISS_SalientRadius" type="double" value="8"/>
+    <param name="ISS_NonMaxRadius" type="double" value="8"/>
+    <param name="ISS_Gamma21" type="double" value="0.975"/>
+    <param name="ISS_Gamma23" type="double" value="0.975"/>
+    <param name="ISS_MinNeighbors" type="int" value="20"/>
+
     <!-- SC-A-LOAM -->
     <param name="keyframe_meter_gap" type="double" value="1.0"/> 
     <param name="keyframe_deg_gap" type="double" value="10.0"/> 
