@@ -365,7 +365,7 @@ void laserCloudHandler(const sensor_msgs::PointCloud2ConstPtr &laserCloudMsg)
                 int ind = cloudSortInd[k];
 
                 if (cloudNeighborPicked[ind] == 0 &&
-                    cloudCurvature[ind] < 0.1)
+                    cloudCurvature[ind] < 1.0)
                 {
 
                     cloudLabel[ind] = -1; 

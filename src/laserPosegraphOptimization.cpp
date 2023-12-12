@@ -1015,12 +1015,12 @@ void pubLocalMap(void) {
         mKF.lock();
         for (size_t i = 0; i < queueSize; ++i) {
             int Idx = localMapIdxQueue.front(); // 큐의 맨 앞 데이터에 접근
-            cout << Idx;
+            // cout << Idx;
             *localMap += *local2global(keyframeLaserClouds[Idx], keyframePosesUpdated[Idx]);
             localMapIdxQueue.pop(); // 맨 앞 데이터 삭제
             localMapIdxQueue.push(Idx); // 삭제한 데이터를 다시 큐에 삽입
         }
-        cout << endl;
+        // cout << endl;
         mKF.unlock();
 
         // 현재 프레임 기준 
@@ -1042,7 +1042,7 @@ void pubLocalMap(void) {
         downSizeFilterLocalMap.filter(*localMap);
 
         aloam_velodyne::LocalMapAndPose LocalMapAndPoseMsg;
-        cout << localMapProcessedIdx << endl;
+        // cout << localMapProcessedIdx << endl;
         geometry_msgs::Pose rosPose = gtsamPoseToROSPose(keyframePosesUpdated[localMapProcessedIdx]);
         
         sensor_msgs::PointCloud2 localMapMsg;
@@ -1161,9 +1161,12 @@ void process_isam(void)
     }
 }
 
+int clusterCountVector[20];
+
 void pubMap(void)
 {
     int SKIP_FRAMES = 1; // sparse map visulalization to save computations 
+
     int counter = 0;
 
     laserCloudMapPGO->clear();
@@ -1185,51 +1188,137 @@ void pubMap(void)
     downSizeFilterMapPGO.setInputCloud(laserCloudMapPGO);
     downSizeFilterMapPGO.filter(*laserCloudMapPGO);
 
-    // pcl::search::KdTree<PointType>::Ptr tree (new pcl::search::KdTree<PointType>);
-    // tree->setInputCloud (globalkeypointvis);
+    pcl::search::KdTree<PointType>::Ptr tree (new pcl::search::KdTree<PointType>);
+    tree->setInputCloud (globalkeypointvis);
 
-    // std::vector<pcl::PointIndices> cluster_indices;
+    std::vector<pcl::PointIndices> cluster_indices;
 
-    // pcl::EuclideanClusterExtraction<PointType> ec;
-    // ec.setClusterTolerance (0.5);
-    // ec.setMinClusterSize (4);
-    // ec.setMaxClusterSize (25000);
-    // ec.setSearchMethod (tree);
-    // ec.setInputCloud (globalkeypointvis);
-    // ec.extract (cluster_indices);
+    pcl::EuclideanClusterExtraction<PointType> ec;
+    ec.setClusterTolerance (0.2);
+    ec.setMinClusterSize (4);
+    ec.setMaxClusterSize (25000);
+    ec.setSearchMethod (tree);
+    ec.setInputCloud (globalkeypointvis);
+    ec.extract (cluster_indices);
 
-    // keypointsRGB->width = globalkeypointvis->width;
-    // keypointsRGB->height = globalkeypointvis->height;
-    // keypointsRGB->is_dense = false;
-    // keypointsRGB->points.resize(globalkeypointvis->points.size());
+    keypointsRGB->width = globalkeypointvis->width;
+    keypointsRGB->height = globalkeypointvis->height;
+    keypointsRGB->is_dense = false;
+    keypointsRGB->points.resize(globalkeypointvis->points.size());
 
-    // // 각 클러스터에 랜덤 색상 부여
-    // for (const auto& cluster : cluster_indices) {
-    //     // 클러스터 내의 각 인덱스에 대해 작업
-    //     int r = rand() % 256;
-    //     int g = rand() % 256;
-    //     int b = rand() % 256;
-    //     for (const auto& idx : cluster.indices) {
-    //         pcl::PointXYZI pointI = globalkeypointvis->points[idx];
-    //         pcl::PointXYZRGB pointRGB;
+    int clusterCount;
+    int clusterCountArr[21];
 
-    //         // 인텐시티 값을 0-255 범위로 매핑
-    //         int intensity = static_cast<int>(pointI.intensity * 255);
+    for (int i = 0; i < 20; i++){
+        clusterCountArr[i] = 0;
+    }
 
-    //         // R, G, B 색상을 설정
-    //         pointRGB.r = r;
-    //         pointRGB.g = g;
-    //         pointRGB.b = b;
+    // 각 클러스터에 랜덤 색상 부여
+    for (const auto& cluster : cluster_indices) {
 
-    //         pointRGB.x = pointI.x;
-    //         pointRGB.y = pointI.y;
-    //         pointRGB.z = pointI.z;
+        clusterCount = 0;
+        // 클러스터 내의 각 인덱스에 대해 작업
+        int r = 0.0;
+        int g = 100 + rand() % 156;
+        int b = 0.0;
+        for (const auto& idx : cluster.indices) {
+            pcl::PointXYZI pointI = globalkeypointvis->points[idx];
+            pcl::PointXYZRGB pointRGB;
 
-    //         keypointsRGB->points[idx] = pointRGB;
-    //     }
-    // }
+            // 인텐시티 값을 0-255 범위로 매핑
+            int intensity = static_cast<int>(pointI.intensity * 255);
+
+            // R, G, B 색상을 설정
+            pointRGB.r = r;
+            pointRGB.g = g;
+            pointRGB.b = b;
+
+            pointRGB.x = pointI.x;
+            pointRGB.y = pointI.y;
+            pointRGB.z = pointI.z;
+
+            keypointsRGB->points[idx] = pointRGB;
+            clusterCount++;
+        }
+        if (clusterCount < 20) {
+            clusterCountArr[clusterCount]++;
+        }
+        else {
+            clusterCountArr[20]++;
+        }
+
+        if (clusterCount > 8) {
+            for (const auto& idx : cluster.indices) {
+            pcl::PointXYZI pointI = globalkeypointvis->points[idx];
+            pcl::PointXYZRGB pointRGB;
+
+            // 인텐시티 값을 0-255 범위로 매핑
+            int intensity = static_cast<int>(pointI.intensity * 255);
+
+            // R, G, B 색상을 설정
+            pointRGB.r = 0.0;
+            pointRGB.g = 0.0;
+            pointRGB.b = 255.0;
+
+            pointRGB.x = pointI.x;
+            pointRGB.y = pointI.y;
+            pointRGB.z = pointI.z;
+
+            keypointsRGB->points[idx] = pointRGB;
+            }
+        }
+
+        if (clusterCount > 12) {
+            for (const auto& idx : cluster.indices) {
+            pcl::PointXYZI pointI = globalkeypointvis->points[idx];
+            pcl::PointXYZRGB pointRGB;
+
+            // 인텐시티 값을 0-255 범위로 매핑
+            int intensity = static_cast<int>(pointI.intensity * 255);
+
+            // R, G, B 색상을 설정
+            pointRGB.r = 255.0;
+            pointRGB.g = 0.0;
+            pointRGB.b = 0.0;
+
+            pointRGB.x = pointI.x;
+            pointRGB.y = pointI.y;
+            pointRGB.z = pointI.z;
+
+            keypointsRGB->points[idx] = pointRGB;
+            }
+        }
+
+        if (clusterCount > 16) {
+            for (const auto& idx : cluster.indices) {
+            pcl::PointXYZI pointI = globalkeypointvis->points[idx];
+            pcl::PointXYZRGB pointRGB;
+
+            // 인텐시티 값을 0-255 범위로 매핑
+            int intensity = static_cast<int>(pointI.intensity * 255);
+
+            // R, G, B 색상을 설정
+            pointRGB.r = 0.0;
+            pointRGB.g = 0.0;
+            pointRGB.b = 0.0;
+
+            pointRGB.x = pointI.x;
+            pointRGB.y = pointI.y;
+            pointRGB.z = pointI.z;
+
+            keypointsRGB->points[idx] = pointRGB;
+            }
+        }
+    }
+
+    for (int i = 0; i < 20; i++){
+        cout << i << "개:" << clusterCountArr[i] << "|";
+    }
+    cout << "20 이상:" << clusterCountArr[20] << "|";
+    cout << endl;
+    
     sensor_msgs::PointCloud2 KeypointMsg;
-    pcl::toROSMsg(*globalkeypointvis, KeypointMsg);
+    pcl::toROSMsg(*keypointsRGB, KeypointMsg);
     KeypointMsg.header.frame_id = "/camera_init";
     pubKeyPoint.publish(KeypointMsg);
 
@@ -1295,7 +1384,7 @@ int main(int argc, char **argv)
     initNoises();
 
     float filter_size = 0.3; 
-    float localMapFilterSize = 0.3; 
+    float localMapFilterSize = 0.2; 
     downSizeFilterScancontext.setLeafSize(filter_size, filter_size, filter_size);
     downSizeFilterICP.setLeafSize(filter_size, filter_size, filter_size);
     downSizeFilterLocalMap.setLeafSize(localMapFilterSize, localMapFilterSize, localMapFilterSize);
