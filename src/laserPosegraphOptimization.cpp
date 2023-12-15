@@ -41,6 +41,7 @@
 #include <ros/ros.h>
 #include <sensor_msgs/Imu.h>
 #include <std_msgs/Int64.h>
+#include <std_msgs/Float64MultiArray.h>
 #include <sensor_msgs/PointCloud2.h>
 #include <sensor_msgs/NavSatFix.h>
 #include <tf/transform_datatypes.h>
@@ -51,6 +52,10 @@
 #include <geometry_msgs/Pose.h>
 #include <aloam_velodyne/LCPair.h>
 #include <aloam_velodyne/LocalMapAndPose.h>
+#include <aloam_velodyne/PointCloud2List.h>
+#include <aloam_velodyne/Float64MultiArrayArray.h>
+#include <aloam_velodyne/MapAndDescriptors.h>
+
 
 #include <eigen3/Eigen/Dense>
 
@@ -108,6 +113,7 @@ pcl::PointCloud<PointType>::Ptr laserCloudFullRes(new pcl::PointCloud<PointType>
 pcl::PointCloud<PointType>::Ptr laserCloudMapAfterPGO(new pcl::PointCloud<PointType>());
 
 std::vector<pcl::PointCloud<PointType>::Ptr> keyframeLaserClouds;
+std::vector<aloam_velodyne::Float64MultiArrayArray> descriptorsVector;
 
 std::vector<Pose6D> keyframePoses;
 std::vector<Pose6D> keyframePosesUpdated;
@@ -149,6 +155,7 @@ pcl::PointCloud<PointType>::Ptr keypoints(new pcl::PointCloud<PointType>);
 pcl::PointCloud<pcl::PointXYZRGB>::Ptr keypointsRGB(new pcl::PointCloud<pcl::PointXYZRGB>);
 pcl::PointCloud<PointType>::Ptr localMap(new pcl::PointCloud<PointType>());
 pcl::PointCloud<PointType>::Ptr globalkeypointvis(new pcl::PointCloud<PointType>);
+pcl::PointCloud<PointType>::Ptr localkeypointvis(new pcl::PointCloud<PointType>);
 std::vector<pcl::PointCloud<PointType>::Ptr> keypointsVector;
 pcl::VoxelGrid<PointType> downSizeFilterMapPGO;
 bool laserCloudMapPGORedraw = true;
@@ -166,8 +173,9 @@ float LocalMapBoundary = 30.0; // pubLocalMap
 int currentUpdateIdx = 0; // pubLocalMap
 int localMapProcesseRange = 5; // int localMapSize = 6;, must Odd numbers // pubLocalMap
 int localMapProcessedIdx = 0; // pubLocalMap
+int keypointsVectorSize = 0;
 
-ros::Publisher pubMapAftPGO, pubOdomAftPGO, pubPathAftPGO, pubKeyPoint, pubKeyLocalMap;
+ros::Publisher pubMapAftPGO, pubOdomAftPGO, pubPathAftPGO, pubKeyPointglobal, pubKeyLocalMap, pubKeyPointlocal, pubKeyPointglobalGraph, pubKeyPointlocalGraph;
 ros::Publisher pubLoopScanLocal, pubLoopSubmapLocal, pubConstraintEdge, pubHandlc, pubLoopIcpResult;//, pubLoopIcpResult;
 ros::Publisher pubOdomRepubVerifier;
 ros::Publisher pubKeyFrameDS, pubDetectTrigger;
@@ -357,17 +365,25 @@ void LCHandler(const aloam_velodyne::LCPair::ConstPtr &_laserOdometry){
 }  // ScancontextHandler
 
 
-void keyPointHandler(const sensor_msgs::PointCloud2ConstPtr &_keyPoints){
-    mBuf.lock();
-    // ROSmsg 타입의 pointcloud를 pcl::PointCloud 로 변환
-    pcl::PointCloud<PointType>::Ptr thisKeyPoints(new pcl::PointCloud<PointType>());
-    pcl::fromROSMsg(*_keyPoints, *thisKeyPoints);
-
-    // 들어온 keyFrame을 keyFrameQue에 push
+void keyPointHandler(const aloam_velodyne::PointCloud2List::ConstPtr &_keyPoints){
     mKeyPoint.lock();
-    keypointsVector.push_back(thisKeyPoints);
+    keypointsVector.clear();
+    descriptorsVector.clear();
+    for (int i = 0; i < _keyPoints->size; i++) {
+        pcl::PointCloud<PointType>::Ptr thisKeyPoints(new pcl::PointCloud<PointType>());
+        pcl::fromROSMsg(_keyPoints->keypoints[i], *thisKeyPoints);
+        keypointsVector.push_back(thisKeyPoints);
+        aloam_velodyne::Float64MultiArrayArray descriptorsCache;
+        for (int a = 0; a < thisKeyPoints->points.size(); a++){
+            descriptorsCache.descriptor.push_back(_keyPoints->descriptors[i].descriptor[a]);
+        }
+        descriptorsVector.push_back(descriptorsCache);
+
+        keypointsVectorSize = keypointsVector.size();
+    }
+    // _keyPoints 5째 노드의 키포인트의 2번째 포인트
+    // cout <<"[[[[sub]"<< keypointsVector[5]->points[1] << "|||" << _keyPoints->descriptors[5].descriptor[1] <<"]]]]"<< endl;
     mKeyPoint.unlock();
-    mBuf.unlock();
 } 
 
 void initNoises( void )
@@ -817,163 +833,6 @@ void process_pg()
     }
 } // process_pg
 
-// void surround_keypoint_detection( int Idx ){
-//     // cout << "[surround_keypoint_detection] process..." << endl;
-//     // LocalCloud 초기화
-//     laserCloudLocal->clear();
-
-//     // Local_map_idx(키프레임 범위) 범위 중 중간 keyframe 인덱스 기준으로 Local_map_boundary만큼 크롭 -> LocalCloud에 저장
-//     int idxMin = 0;
-//     int idxMid = 0;
-//     if (int(Idx - Local_map_idx) > 0){
-//         idxMin = int(Idx - Local_map_idx);
-//         int idxMid = 0;
-//     }
-//     mKF.lock();
-//     pcl::PointXYZ pclCenterPoint = pointToPCL(keyframePosesUpdated[Idx - (Local_map_idx/2)]);
-//     for (int node_idx = idxMin; node_idx <= Idx; node_idx++) {
-//         *laserCloudLocal += *local2global(keyframeLaserClouds[node_idx], keyframePosesUpdated[node_idx]);
-//     }
-//     mKF.unlock();
-
-//     // 오브젝트 생성 
-//     pcl::PassThrough<PointType> pass;
-//     pass.setInputCloud (laserCloudLocal);
-//     pass.setFilterFieldName ("x");
-//     pass.setFilterLimits (pclCenterPoint.x - Local_map_boundary, pclCenterPoint.x + Local_map_boundary);
-//     pass.filter (*laserCloudLocal);
-
-//     pass.setFilterFieldName ("y");
-//     pass.setFilterLimits (pclCenterPoint.y - Local_map_boundary, pclCenterPoint.y + Local_map_boundary);
-//     pass.filter (*laserCloudLocal);
-
-//     pass.setFilterFieldName ("z");
-//     pass.setFilterLimits (pclCenterPoint.z - 10.0, pclCenterPoint.z + 10.0);
-//     pass.filter (*laserCloudLocal);
-
-//     // downSizeFilterLocal.setLeafSize(0.05, 0.05, 0.05);
-//     // downSizeFilterLocal.setInputCloud(laserCloudLocal);
-//     // downSizeFilterLocal.filter(*laserCloudLocal);
-
-//     // 키포인트 추출
-//     pcl::PointCloud<PointType>::Ptr currkeypoints(new pcl::PointCloud<PointType>);
-
-//     // [] ISS keypoint 추출
-// 	pcl::ISSKeypoint3D<PointType, PointType> detector;
-// 	detector.setInputCloud(laserCloudLocal);
-// 	pcl::search::KdTree<PointType>::Ptr kdtree(new pcl::search::KdTree<PointType>);
-// 	detector.setSearchMethod(kdtree);
-// 	// double resolution = computeCloudResolution(cloud);
-// 	// Set the radius of the spherical neighborhood used to compute the scatter matrix.
-// 	detector.setSalientRadius(ISS_SalientRadius * 0.2);
-// 	// Set the radius for the application of the non maxima supression algorithm.
-// 	detector.setNonMaxRadius(ISS_NonMaxRadius * 0.2);
-// 	// Set the minimum number of neighbors that has to be found while applying the non maxima suppression algorithm.
-// 	detector.setMinNeighbors(ISS_MinNeighbors);
-// 	// Set the upper bound on the ratio between the second and the first eigenvalue.
-// 	detector.setThreshold21(ISS_Gamma21);
-// 	// Set the upper bound on the ratio between the third and the second eigenvalue.
-// 	detector.setThreshold32(ISS_Gamma23);
-// 	// Set the number of prpcessing threads to use. 0 sets it to automatic.
-// 	detector.setNumberOfThreads(4);
-// 	detector.compute(*currkeypoints);
-
-//     // 바운더리 근처의 키포인트는 제거
-//     pass.setInputCloud (currkeypoints);
-//     pass.setFilterFieldName ("x");
-//     pass.setFilterLimits (pclCenterPoint.x - (2*Local_map_boundary/3), pclCenterPoint.x + (2*Local_map_boundary/3));
-//     pass.filter (*currkeypoints);
-
-//     pass.setFilterFieldName ("y");
-//     pass.setFilterLimits (pclCenterPoint.y - (2*Local_map_boundary/3), pclCenterPoint.y + (2*Local_map_boundary/3));
-//     pass.filter (*currkeypoints);
-
-//     pass.setFilterFieldName ("z");
-//     pass.setFilterLimits (pclCenterPoint.z - 10.0, pclCenterPoint.z + 10.0);
-//     pass.filter (*currkeypoints);
-
-//     cout << "Keypoint's num : " << currkeypoints->points.size() << endl;
-
-//     *currkeypoints = *global2local(currkeypoints, keyframePosesUpdated[Idx]);
-//     keypointsVector.push_back(currkeypoints);
-
-//     // // 클러스터 추출 파라미터 설정
-//     // pcl::search::KdTree<PointType>::Ptr tree(new pcl::search::KdTree<PointType>);
-//     // tree->setInputCloud(keypoints);
-
-//     // std::vector<pcl::PointIndices> cluster_indices;
-//     // pcl::EuclideanClusterExtraction<PointType> ec;
-//     // ec.setClusterTolerance(1.0); // 클러스터의 거리 허용 오차 (조절 가능)
-//     // ec.setMinClusterSize(1);    // 클러스터의 최소 크기 (조절 가능)
-//     // ec.setMaxClusterSize(100);  // 클러스터의 최대 크기 (조절 가능)
-//     // ec.setSearchMethod(tree);
-//     // ec.setInputCloud(keypoints);
-//     // ec.extract(cluster_indices);
-
-//     // currkeypoints->clear();
-
-//     // // 각 클러스터의 중심점을 찾고 추출
-//     // for (std::vector<pcl::PointIndices>::const_iterator it = cluster_indices.begin(); it != cluster_indices.end(); ++it) {
-//     //     pcl::PointCloud<PointType>::Ptr cluster(new pcl::PointCloud<PointType>);
-
-//     //     for (std::vector<int>::const_iterator pit = it->indices.begin(); pit != it->indices.end(); ++pit) {
-//     //         cluster->points.push_back(keypoints->points[*pit]);
-//     //     }
-
-//     //     // 중심점 계산
-//     //     Eigen::Vector4f centroid;
-//     //     pcl::compute3DCentroid(*cluster, centroid);
-        
-//     //     PointType cluster_center;
-//     //     cluster_center.x = centroid[0];
-//     //     cluster_center.y = centroid[1];
-//     //     cluster_center.z = centroid[2];
-        
-//     //     currkeypoints->push_back(cluster_center);
-//     // }
-//     // keypoints = currkeypoints;
-
-
-//     // // [] Normal 생성
-//     // pcl::PointCloud<pcl::Normal>::Ptr normals(new pcl::PointCloud<pcl::Normal>);
-//     // pcl::PointCloud<pcl::SHOT352>::Ptr descriptors(new pcl::PointCloud<pcl::SHOT352>()); // 352 size vector descriptor
-//     // // pcl::PointCloud<pcl::FPFHSignature33>::Ptr descriptors(new pcl::PointCloud<pcl::FPFHSignature33>());
-	
-// 	// // Estimate the normals.
-// 	// pcl::NormalEstimation<PointType, pcl::Normal> normalEstimation;
-//     // normalEstimation.setInputCloud(laserCloudLocal);
-//     // normalEstimation.setKSearch(50);
-//     // // normalEstimation.setRadiusSearch(5.0);
-// 	// kdtree.reset(new pcl::search::KdTree<PointType>);
-// 	// normalEstimation.setSearchMethod(kdtree);
-// 	// normalEstimation.compute(*normals);
-
-//     // // [] SHOT estimation object.
-// 	// pcl::SHOTEstimation<PointType, pcl::Normal, pcl::SHOT352> shot;
-//     // shot.setInputCloud(keypoints);
-// 	// shot.setInputNormals(normals);
-// 	// // The radius that defines which of the keypoint's neighbors are described.
-// 	// // If too large, there may be clutter, and if too small, not enough points may be found.
-//     // shot.setSearchMethod (kdtree);
-//     // shot.setRadiusSearch(3.0);
-//     // shot.compute(*descriptors);
-
-//     // // [] SHOT 디스크립터 출력
-//     // for (size_t i = 0; i < descriptors->points.size(); ++i) {
-//     //     pcl::SHOT352 descriptor = descriptors->points[i];
-//     //     cout << "SHOT Descriptor " << i << ": ";
-//     //     for (size_t j = 0; j < 352; ++j) {
-//     //         cout << descriptor.descriptor[j] << " ";
-//     //     }
-//     //     cout << std::endl;
-//     // }LGM_keypoint_Map
-
-//     sensor_msgs::PointCloud2 KeypointMapMsg;
-//     pcl::toROSMsg(*laserCloudLocal, KeypointMapMsg);
-//     KeypointMapMsg.header.frame_id = "/camera_init";
-//     pubKeyLocalMap.publish(KeypointMapMsg);
-
-// } 
 
 pcl::PointXYZ pointToPCL(const Pose6D& pose) {
     pcl::PointXYZ pcl_point;
@@ -1058,24 +917,6 @@ void pubLocalMap(void) {
         localMapProcessedIdx++;
     }
 }
-
-// int recentIdxprocessed = Local_map_idx;
-// void process_keypoints(void){
-//     float loopClosureFrequency = 10.0; // can change 
-//     ros::Rate rate(loopClosureFrequency);
-//     for (int i = 0; i < Local_map_idx; i++){
-//         pcl::PointCloud<PointType>::Ptr nonkeypoints(new pcl::PointCloud<PointType>);
-//         keypointsVector.push_back(nonkeypoints);
-//     }
-//     while (ros::ok()){
-//         rate.sleep();
-//         if (recentIdxprocessed < recentIdxUpdated) {
-//             // cout << recentIdxprocessed << endl;
-//             // surround_keypoint_detection(recentIdxprocessed);
-//             recentIdxprocessed++;
-//         }
-//     }
-// }
 
 void process_lcd(void)
 {
@@ -1166,12 +1007,9 @@ int clusterCountVector[20];
 void pubMap(void)
 {
     int SKIP_FRAMES = 1; // sparse map visulalization to save computations 
-
     int counter = 0;
 
     laserCloudMapPGO->clear();
-    keypointsRGB->clear();
-    globalkeypointvis->clear();
 
     mKF.lock(); 
     for (int node_idx=0; node_idx < recentIdxUpdated; node_idx++) {
@@ -1180,147 +1018,10 @@ void pubMap(void)
         }
         counter++;
     }
-    for (int node_idx=0; node_idx < keypointsVector.size(); node_idx++) {
-        *globalkeypointvis += *local2global(keypointsVector[node_idx], keyframePosesUpdated[node_idx]);//*keypointsVector[node_idx];
-    }
     mKF.unlock(); 
 
     downSizeFilterMapPGO.setInputCloud(laserCloudMapPGO);
     downSizeFilterMapPGO.filter(*laserCloudMapPGO);
-
-    pcl::search::KdTree<PointType>::Ptr tree (new pcl::search::KdTree<PointType>);
-    tree->setInputCloud (globalkeypointvis);
-
-    std::vector<pcl::PointIndices> cluster_indices;
-
-    pcl::EuclideanClusterExtraction<PointType> ec;
-    ec.setClusterTolerance (0.2);
-    ec.setMinClusterSize (4);
-    ec.setMaxClusterSize (25000);
-    ec.setSearchMethod (tree);
-    ec.setInputCloud (globalkeypointvis);
-    ec.extract (cluster_indices);
-
-    keypointsRGB->width = globalkeypointvis->width;
-    keypointsRGB->height = globalkeypointvis->height;
-    keypointsRGB->is_dense = false;
-    keypointsRGB->points.resize(globalkeypointvis->points.size());
-
-    int clusterCount;
-    int clusterCountArr[21];
-
-    for (int i = 0; i < 20; i++){
-        clusterCountArr[i] = 0;
-    }
-
-    // 각 클러스터에 랜덤 색상 부여
-    for (const auto& cluster : cluster_indices) {
-
-        clusterCount = 0;
-        // 클러스터 내의 각 인덱스에 대해 작업
-        int r = 0.0;
-        int g = 100 + rand() % 156;
-        int b = 0.0;
-        for (const auto& idx : cluster.indices) {
-            pcl::PointXYZI pointI = globalkeypointvis->points[idx];
-            pcl::PointXYZRGB pointRGB;
-
-            // 인텐시티 값을 0-255 범위로 매핑
-            int intensity = static_cast<int>(pointI.intensity * 255);
-
-            // R, G, B 색상을 설정
-            pointRGB.r = r;
-            pointRGB.g = g;
-            pointRGB.b = b;
-
-            pointRGB.x = pointI.x;
-            pointRGB.y = pointI.y;
-            pointRGB.z = pointI.z;
-
-            keypointsRGB->points[idx] = pointRGB;
-            clusterCount++;
-        }
-        if (clusterCount < 20) {
-            clusterCountArr[clusterCount]++;
-        }
-        else {
-            clusterCountArr[20]++;
-        }
-
-        if (clusterCount > 8) {
-            for (const auto& idx : cluster.indices) {
-            pcl::PointXYZI pointI = globalkeypointvis->points[idx];
-            pcl::PointXYZRGB pointRGB;
-
-            // 인텐시티 값을 0-255 범위로 매핑
-            int intensity = static_cast<int>(pointI.intensity * 255);
-
-            // R, G, B 색상을 설정
-            pointRGB.r = 0.0;
-            pointRGB.g = 0.0;
-            pointRGB.b = 255.0;
-
-            pointRGB.x = pointI.x;
-            pointRGB.y = pointI.y;
-            pointRGB.z = pointI.z;
-
-            keypointsRGB->points[idx] = pointRGB;
-            }
-        }
-
-        if (clusterCount > 12) {
-            for (const auto& idx : cluster.indices) {
-            pcl::PointXYZI pointI = globalkeypointvis->points[idx];
-            pcl::PointXYZRGB pointRGB;
-
-            // 인텐시티 값을 0-255 범위로 매핑
-            int intensity = static_cast<int>(pointI.intensity * 255);
-
-            // R, G, B 색상을 설정
-            pointRGB.r = 255.0;
-            pointRGB.g = 0.0;
-            pointRGB.b = 0.0;
-
-            pointRGB.x = pointI.x;
-            pointRGB.y = pointI.y;
-            pointRGB.z = pointI.z;
-
-            keypointsRGB->points[idx] = pointRGB;
-            }
-        }
-
-        if (clusterCount > 16) {
-            for (const auto& idx : cluster.indices) {
-            pcl::PointXYZI pointI = globalkeypointvis->points[idx];
-            pcl::PointXYZRGB pointRGB;
-
-            // 인텐시티 값을 0-255 범위로 매핑
-            int intensity = static_cast<int>(pointI.intensity * 255);
-
-            // R, G, B 색상을 설정
-            pointRGB.r = 0.0;
-            pointRGB.g = 0.0;
-            pointRGB.b = 0.0;
-
-            pointRGB.x = pointI.x;
-            pointRGB.y = pointI.y;
-            pointRGB.z = pointI.z;
-
-            keypointsRGB->points[idx] = pointRGB;
-            }
-        }
-    }
-
-    for (int i = 0; i < 20; i++){
-        cout << i << "개:" << clusterCountArr[i] << "|";
-    }
-    cout << "20 이상:" << clusterCountArr[20] << "|";
-    cout << endl;
-    
-    sensor_msgs::PointCloud2 KeypointMsg;
-    pcl::toROSMsg(*keypointsRGB, KeypointMsg);
-    KeypointMsg.header.frame_id = "/camera_init";
-    pubKeyPoint.publish(KeypointMsg);
 
     sensor_msgs::PointCloud2 laserCloudMapPGOMsg;
     pcl::toROSMsg(*laserCloudMapPGO, laserCloudMapPGOMsg);
@@ -1328,15 +1029,90 @@ void pubMap(void)
     pubMapAftPGO.publish(laserCloudMapPGOMsg);
 }
 
+void pubKeyPoint(void) {
+    globalkeypointvis->clear();
+    localkeypointvis->clear();
+    aloam_velodyne::MapAndDescriptors gloabalMapAndDescriptorsMsg; //여기에 같은 순서로 디스크립터도 채워야 함. 그전에 콜백에서 디스크립터 담기(그냥 메시지 벡터)
+    aloam_velodyne::MapAndDescriptors localMapAndDescriptorsMsg;
+    int gloabalPointSize = 0;
+    int localPointSize = 0;
+    mKeyPoint.lock();
+    if ( keypointsVectorSize > 50 ){
+        // gloabalMapAndDescriptorsMsg.size = keypointsVectorSize-50;
+        for (int node_idx=0; node_idx < keypointsVectorSize-50; node_idx++) {
+            *globalkeypointvis += *local2global(keypointsVector[node_idx], keyframePosesUpdated[node_idx]);//*keypointsVector[node_idx];
+            std_msgs::Float64MultiArray descriptorsCashe;
+            for (int a = 0; a < keypointsVector[node_idx]->size(); a++){
+                gloabalMapAndDescriptorsMsg.descriptors.descriptor.push_back(descriptorsVector[node_idx].descriptor[a]);
+                gloabalPointSize++;
+            }
+        }
+        gloabalMapAndDescriptorsMsg.size = gloabalPointSize;
+        // localMapAndDescriptorsMsg.size = 50;
+        for (int node_idx=keypointsVectorSize-50; node_idx < keypointsVectorSize; node_idx++) {
+            *localkeypointvis += *local2global(keypointsVector[node_idx], keyframePosesUpdated[node_idx]);//*keypointsVector[node_idx];
+            for (int a = 0; a < keypointsVector[node_idx]->size(); a++){
+                localMapAndDescriptorsMsg.descriptors.descriptor.push_back(descriptorsVector[node_idx].descriptor[a]);
+                localPointSize++;
+            }
+        }
+        localMapAndDescriptorsMsg.size = localPointSize;
+
+        mKeyPoint.unlock();
+        sensor_msgs::PointCloud2 KeypointMsg;
+        pcl::toROSMsg(*globalkeypointvis, KeypointMsg);
+        KeypointMsg.header.frame_id = "/camera_init";
+        pubKeyPointglobal.publish(KeypointMsg);
+
+        sensor_msgs::PointCloud2 KeypointLocalMsg;
+        pcl::toROSMsg(*localkeypointvis, KeypointLocalMsg);
+        KeypointLocalMsg.header.frame_id = "/camera_init";
+        pubKeyPointlocal.publish(KeypointLocalMsg);
+
+        gloabalMapAndDescriptorsMsg.keypoints = KeypointMsg;
+        pubKeyPointglobalGraph.publish(gloabalMapAndDescriptorsMsg);
+
+        localMapAndDescriptorsMsg.keypoints = KeypointLocalMsg;
+        pubKeyPointlocalGraph.publish(localMapAndDescriptorsMsg);
+    }
+    else {
+        aloam_velodyne::Float64MultiArrayArray::Ptr globalDescriptors(new aloam_velodyne::Float64MultiArrayArray());
+        for (int node_idx=0; node_idx < keypointsVectorSize; node_idx++) {
+            *globalkeypointvis += *local2global(keypointsVector[node_idx], keyframePosesUpdated[node_idx]);//*keypointsVector[node_idx];
+            for (int a = 0; a < keypointsVector[node_idx]->size(); a++){
+                gloabalMapAndDescriptorsMsg.descriptors.descriptor.push_back(descriptorsVector[node_idx].descriptor[a]);
+                gloabalPointSize++;
+            }
+        }
+        gloabalMapAndDescriptorsMsg.size = gloabalPointSize;
+        mKeyPoint.unlock();
+
+        sensor_msgs::PointCloud2 KeypointMsg;
+        pcl::toROSMsg(*globalkeypointvis, KeypointMsg);
+        KeypointMsg.header.frame_id = "/camera_init";
+        pubKeyPointglobal.publish(KeypointMsg);
+
+        gloabalMapAndDescriptorsMsg.keypoints = KeypointMsg;
+        pubKeyPointglobalGraph.publish(gloabalMapAndDescriptorsMsg);
+    }
+}
 
 void process_viz_map(void)
 {
-    float vizmapFrequency = 0.1; // 0.1 means run onces every 10s
+    int processCount = 0;
+    float vizmapFrequency = 1.0; // 0.1 means run onces every 10s
     ros::Rate rate(vizmapFrequency);
     while (ros::ok()) {
         rate.sleep();
         if(recentIdxUpdated > 1) {
-            pubMap();
+            if(processCount > 10){
+                pubMap();
+                processCount = 0;
+            }
+            processCount++;
+        }
+        if(keypointsVectorSize > 1) {
+            pubKeyPoint();
         }
     }
 } // pointcloud_viz
@@ -1399,14 +1175,18 @@ int main(int argc, char **argv)
 	ros::Subscriber subGPS = nh.subscribe<sensor_msgs::NavSatFix>("/gps/fix", 100, gpsHandler);
 
     ros::Subscriber subLCdetectResult = nh.subscribe<aloam_velodyne::LCPair>("/LCdetectResult", 100, LCHandler); // std::pair<int, float> 가 리턴
-    ros::Subscriber subKeyPoint = nh.subscribe<sensor_msgs::PointCloud2>("/keyPointResult", 100, keyPointHandler);
+    ros::Subscriber subKeyPoint = nh.subscribe<aloam_velodyne::PointCloud2List>("/keyPointResult", 100, keyPointHandler);
 
 	pubOdomAftPGO = nh.advertise<nav_msgs::Odometry>("/aft_pgo_odom", 100);
 	pubOdomRepubVerifier = nh.advertise<nav_msgs::Odometry>("/repub_odom", 100);
 	pubPathAftPGO = nh.advertise<nav_msgs::Path>("/aft_pgo_path", 100);
 	pubMapAftPGO = nh.advertise<sensor_msgs::PointCloud2>("/aft_pgo_map", 100);
-    pubKeyPoint = nh.advertise<sensor_msgs::PointCloud2>("/LGM_keypoint", 100);
+    pubKeyPointglobal = nh.advertise<sensor_msgs::PointCloud2>("/LGM_keypointGlobal", 100);
+    pubKeyPointlocal = nh.advertise<sensor_msgs::PointCloud2>("/LGM_keypointLocal", 100);
     pubKeyLocalMap = nh.advertise<aloam_velodyne::LocalMapAndPose>("/LGMLocalMap", 100);
+
+    pubKeyPointglobalGraph = nh.advertise<aloam_velodyne::MapAndDescriptors>("/keypointGlobalGraph", 100);
+    pubKeyPointlocalGraph = nh.advertise<aloam_velodyne::MapAndDescriptors>("/keypointLocalGraph", 100);
 
     pubKeyFrameDS = nh.advertise<sensor_msgs::PointCloud2>("/KeyFrameDSforLC", 100);
 
@@ -1414,8 +1194,8 @@ int main(int argc, char **argv)
 	pubLoopSubmapLocal = nh.advertise<sensor_msgs::PointCloud2>("/loop_submap_local", 100);
     // pubLoopIcpResult = nh.advertise<sensor_msgs::PointCloud2>("/loop_icpResult", 100);
 
-    pubConstraintEdge = nh.advertise<visualization_msgs::MarkerArray>("/sc_match_constraints", 10);
-    pubHandlc = nh.advertise<visualization_msgs::MarkerArray>("/hand_lc_point", 10);
+    // pubConstraintEdge = nh.advertise<visualization_msgs::MarkerArray>("/sc_match_constraints", 10);
+    // pubHandlc = nh.advertise<visualization_msgs::MarkerArray>("/hand_lc_point", 10);
 
 	std::thread posegraph_slam {process_pg}; // pose graph construction
     // std::thread key_point {process_keypoints};

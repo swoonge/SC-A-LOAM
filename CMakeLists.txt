@@ -24,6 +24,9 @@ add_message_files(
   FILES
   LCPair.msg
   LocalMapAndPose.msg
+  PointCloud2List.msg
+  Float64MultiArrayArray.msg
+  MapAndDescriptors.msg
 )
 
 generate_messages(

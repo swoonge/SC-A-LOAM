@@ -1,0 +1,3 @@
+int64 size
+sensor_msgs/PointCloud2 keypoints
+aloam_velodyne/Float64MultiArrayArray descriptors

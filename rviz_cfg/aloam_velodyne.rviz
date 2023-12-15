@@ -7,7 +7,6 @@ Panels:
         - /Global Options1
         - /pgoOdom1/Shape1
         - /MarkerArray1/Namespaces1
-        - /PointCloud21
       Splitter Ratio: 0.4882352948188782
     Tree Height: 746
   - Class: rviz/Selection
@@ -543,7 +542,7 @@ Visualization Manager:
         {}
       Queue Size: 100
       Value: false
-    - Alpha: 0.699999988079071
+    - Alpha: 1
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds:
         Max Value: 10
@@ -564,10 +563,10 @@ Visualization Manager:
       Queue Size: 10
       Selectable: true
       Size (Pixels): 3
-      Size (m): 0.20000000298023224
+      Size (m): 0.30000001192092896
       Style: Spheres
-      Topic: /keyPointDisplay
-      Unreliable: true
+      Topic: /LGM_keypointGlobal
+      Unreliable: false
       Use Fixed Frame: true
       Use rainbow: false
       Value: true
@@ -581,24 +580,24 @@ Visualization Manager:
       Channel Name: intensity
       Class: rviz/PointCloud2
       Color: 252; 233; 79
-      Color Transformer: FlatColor
+      Color Transformer: Intensity
       Decay Time: 0
-      Enabled: false
+      Enabled: true
       Invert Rainbow: false
-      Max Color: 255; 255; 255
-      Min Color: 0; 0; 0
+      Max Color: 115; 210; 22
+      Min Color: 138; 226; 52
       Name: PointCloud2
       Position Transformer: XYZ
       Queue Size: 10
       Selectable: true
       Size (Pixels): 3
-      Size (m): 0.20000000298023224
-      Style: Boxes
-      Topic: /keyPointResult
+      Size (m): 0.30000001192092896
+      Style: Spheres
+      Topic: /LGM_keypointLocal
       Unreliable: false
       Use Fixed Frame: true
-      Use rainbow: true
-      Value: false
+      Use rainbow: false
+      Value: true
   Enabled: true
   Global Options:
     Background Color: 238; 238; 236
@@ -627,7 +626,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/XYOrbit
-      Distance: 27.323955535888672
+      Distance: 49.672454833984375
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -635,17 +634,17 @@ Visualization Manager:
         Value: false
       Field of View: 0.7853981852531433
       Focal Point:
-        X: -15.107660293579102
-        Y: -5.951808929443359
-        Z: -1.840733239077963e-05
+        X: -2.945566177368164
+        Y: 5.315680980682373
+        Z: -3.8999780372250825e-05
       Focal Shape Fixed Size: false
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.6703985929489136
+      Pitch: 0.7703982591629028
       Target Frame: aft_pgo
-      Yaw: 3.7954013347625732
+      Yaw: 2.6553964614868164
     Saved: ~
 Window Geometry:
   Displays:
