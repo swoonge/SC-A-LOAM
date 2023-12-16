@@ -7,6 +7,7 @@ Panels:
         - /Global Options1
         - /pgoOdom1/Shape1
         - /MarkerArray1/Namespaces1
+        - /MarkerArray3/Namespaces1
       Splitter Ratio: 0.4882352948188782
     Tree Height: 746
   - Class: rviz/Selection
@@ -598,6 +599,14 @@ Visualization Manager:
       Use Fixed Frame: true
       Use rainbow: false
       Value: true
+    - Class: rviz/MarkerArray
+      Enabled: true
+      Marker Topic: /keypointMatchingDisplay
+      Name: MarkerArray
+      Namespaces:
+        {}
+      Queue Size: 10
+      Value: true
   Enabled: true
   Global Options:
     Background Color: 238; 238; 236
@@ -626,7 +635,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/XYOrbit
-      Distance: 49.672454833984375
+      Distance: 70.45259857177734
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -634,17 +643,17 @@ Visualization Manager:
         Value: false
       Field of View: 0.7853981852531433
       Focal Point:
-        X: -2.945566177368164
-        Y: 5.315680980682373
-        Z: -3.8999780372250825e-05
+        X: 0
+        Y: 0
+        Z: 0
       Focal Shape Fixed Size: false
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.7703982591629028
+      Pitch: 0.4453985095024109
       Target Frame: aft_pgo
-      Yaw: 2.6553964614868164
+      Yaw: 2.5553972721099854
     Saved: ~
 Window Geometry:
   Displays:

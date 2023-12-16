@@ -8,6 +8,7 @@
 #include <string>
 #include <optional>
 #include <tuple>
+#include <pcl/io/vtk_lib_io.h>
 
 #include <tf/transform_datatypes.h>
 #include <pcl/point_cloud.h>
@@ -111,6 +112,11 @@ float ISS_Gamma23 = 0.9;
 int ISS_MinNeighbors = 10;
 std::string Detector = "ISS";
 float HarrisThreshold = 0.000001;
+
+float rops_RadiusSearch = 1.0;
+int rops_NumberOfPartitionBins = 5;
+int rops_NumberOfRotations = 3;
+float rops_SupportRadius = 1.0;
 
 int Local_map_idx = 6;
 int recentIdxprocessed = Local_map_idx;
@@ -293,7 +299,8 @@ void keyPointDetectionHarris(void) {
     pcl::search::KdTree<pcl::PointXYZI>::Ptr treeNe(new pcl::search::KdTree<pcl::PointXYZI> ());
     ne.setSearchMethod(treeNe);
     ne.setKSearch(0);
-    ne.setRadiusSearch(1.0f);
+    ne.setViewPoint(localMapPose.position.x, localMapPose.position.y, localMapPose.position.z);
+    ne.setRadiusSearch(1.0f); // 1
     ne.setInputCloud(localMapPcl);
     ne.compute(*normals);
 
@@ -303,7 +310,7 @@ void keyPointDetectionHarris(void) {
     detector.setNonMaxSupression (true);
     detector.setInputCloud (localMapPcl);
     detector.setRadiusSearch(50);
-    detector.setRadius (1.0f);
+    detector.setRadius (2.0f);
     detector.setThreshold (HarrisThreshold);
     detector.setNormals(normals);
     detector.compute (*currkeypoints);
@@ -324,6 +331,7 @@ void keyPointDetectionHarris(void) {
     pass.filter (*currkeypoints);
 
     // RoPS 디스크립터
+    
     // Perform triangulation.
     pcl::PointCloud<pcl::PointXYZINormal>::Ptr cloudNormals(new pcl::PointCloud<pcl::PointXYZINormal>);
 	pcl::concatenateFields(*localMapPcl, *normals, *cloudNormals);
@@ -331,26 +339,29 @@ void keyPointDetectionHarris(void) {
 	kdtree2->setInputCloud(cloudNormals);
 	pcl::GreedyProjectionTriangulation<pcl::PointXYZINormal> triangulation;
 	pcl::PolygonMesh triangles;
-	triangulation.setSearchRadius(1.0f);
-	triangulation.setMu(2.5);
+	triangulation.setSearchRadius(2.0f);
+	triangulation.setMu(10.0);
 	triangulation.setMaximumNearestNeighbors(50);
-	triangulation.setMaximumSurfaceAngle(M_PI / 4); // 45 degrees.
+	triangulation.setMaximumSurfaceAngle(M_PI / 3); // 45 degrees.
 	triangulation.setNormalConsistency(false);
-	triangulation.setMinimumAngle(M_PI / 18); // 10 degrees.
+	triangulation.setMinimumAngle(M_PI / 36); // 10 degrees.
 	triangulation.setMaximumAngle(2 * M_PI / 3); // 120 degrees.
 	triangulation.setInputCloud(cloudNormals);
 	triangulation.setSearchMethod(kdtree2);
 	triangulation.reconstruct(triangles);
+    pcl::io::savePolygonFileVTK("/home/vision/catkin_ws/dd.vtk", triangles);
 
     pcl::ROPSEstimation<pcl::PointXYZI, pcl::Histogram<135>> rops;
 	rops.setInputCloud(currkeypoints); 
 	rops.setSearchMethod(treeNe);
-    rops.setSearchSurface (localMapPcl);
-	rops.setRadiusSearch(2.0f);
+    rops.setSearchSurface(localMapPcl);
+	rops.setRadiusSearch(rops_RadiusSearch);
 	rops.setTriangles(triangles.polygons);
-	rops.setNumberOfPartitionBins(5);
-	rops.setNumberOfRotations(3);
-	rops.setSupportRadius(1.0f);
+	rops.setNumberOfPartitionBins(rops_NumberOfPartitionBins);
+	rops.setNumberOfRotations(rops_NumberOfRotations);
+	rops.setSupportRadius(rops_SupportRadius); //이게 25mr(mesh resolution)이어야 한다. 즉, support_radius = 0.0285f;일 때 
+    //setRadiusSearch == setSupportRadius로 세팅되어 있다. 실험해볼 것
+    // 즉, 일단 대략적인 mesh resolution이 필요하다. 위의 save로 vik를 받아갔으니, 집에서 열어볼 것
     pcl::PointCloud<pcl::Histogram<135>>::Ptr descriptors(new pcl::PointCloud<pcl::Histogram<135>>());
 	rops.compute(*descriptors);
 
@@ -438,7 +449,6 @@ std::tuple<pcl::PointCloud<PointType>::Ptr, pcl::PointCloud<pcl::Histogram<135>>
         if (clusterSize >= 2) {
             double dist = calculateEuclideanDistance(descriptorIn->points[cluster.indices[0]], descriptorIn->points[cluster.indices[1]]);
             if (isnan(dist)) {
-                // cout << "[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]" << endl;
             }
             else{
                 samePointsEuclideanDistanceCount++;
@@ -619,6 +629,11 @@ int main(int argc, char **argv)
     nh.param<int>("ISS_MinNeighbors", ISS_MinNeighbors, 50);
     nh.param<std::string>("Detector", Detector, "SIFT"); 
     nh.param<float>("HarrisThreshold", HarrisThreshold, 1e-10);
+
+    nh.param<float>("rops_RadiusSearch", rops_RadiusSearch, 1.0);
+    nh.param<int>("rops_NumberOfPartitionBins", rops_NumberOfPartitionBins, 5);
+    nh.param<int>("rops_NumberOfRotations", rops_NumberOfRotations, 3); 
+    nh.param<float>("rops_SupportRadius", rops_SupportRadius, 1.0);
     
     scManager.setSCdistThres(scDistThres);
     scManager.setMaximumRadius(scMaximumRadius);

@@ -1160,7 +1160,7 @@ int main(int argc, char **argv)
     initNoises();
 
     float filter_size = 0.3; 
-    float localMapFilterSize = 0.2; 
+    float localMapFilterSize = 0.05; 
     downSizeFilterScancontext.setLeafSize(filter_size, filter_size, filter_size);
     downSizeFilterICP.setLeafSize(filter_size, filter_size, filter_size);
     downSizeFilterLocalMap.setLeafSize(localMapFilterSize, localMapFilterSize, localMapFilterSize);
