@@ -278,7 +278,7 @@ pcl::PointCloud<pcl::PointXYZI>::Ptr convertPointCloud(const pcl::PointCloud<Poi
     return output_cloud;
 }
 
-void keyPointDetectionHarris(void) {
+void keyPointDetectionISS(void) {
     mLocalMapBuf.lock();
     auto localMapPcl = localMapPclQue.front();
     auto localMapPose = localMapPoseQue.front();
@@ -286,12 +286,28 @@ void keyPointDetectionHarris(void) {
     localMapPoseQue.pop();
     mLocalMapBuf.unlock();
 
-    // 이상치 제거 (Statistical Outlier Removal)
-    pcl::StatisticalOutlierRemoval<pcl::PointXYZI> sor;
-    sor.setInputCloud(localMapPcl);
-    sor.setMeanK(50); // 주변 이웃의 수
-    sor.setStddevMulThresh(1.0); // 표준 편차의 배수
-    sor.filter(*localMapPcl);
+    // 키포인트 추출
+    pcl::PointCloud<PointType>::Ptr currkeypoints(new pcl::PointCloud<PointType>);
+
+    // [] ISS keypoint 추출
+    pcl::ISSKeypoint3D<PointType, PointType> detector;
+    detector.setInputCloud(localMapPcl);
+    pcl::search::KdTree<PointType>::Ptr kdtree(new pcl::search::KdTree<PointType>);
+    detector.setSearchMethod(kdtree);
+    // double resolution = computeCloudResolution(cloud);
+    // Set the radius of the spherical neighborhood used to compute the scatter matrix.
+    detector.setSalientRadius(ISS_SalientRadius * 0.2);
+    // Set the radius for the application of the non maxima supression algorithm.
+    detector.setNonMaxRadius(ISS_NonMaxRadius * 0.2);
+    // Set the minimum number of neighbors that has to be found while applying the non maxima suppression algorithm.
+    detector.setMinNeighbors(ISS_MinNeighbors);
+    // Set the upper bound on the ratio between the second and the first eigenvalue.
+    detector.setThreshold21(ISS_Gamma21);
+    // Set the upper bound on the ratio between the third and the second eigenvalue.
+    detector.setThreshold32(ISS_Gamma23);
+    // Set the number of prpcessing threads to use. 0 sets it to automatic.
+    detector.setNumberOfThreads(4);
+    detector.compute(*currkeypoints);
 
     // NormalEstimation
     pcl::PointCloud<pcl::Normal>::Ptr normals(new pcl::PointCloud<pcl::Normal>);
@@ -304,12 +320,101 @@ void keyPointDetectionHarris(void) {
     ne.setInputCloud(localMapPcl);
     ne.compute(*normals);
 
+    // 바운더리 근처의 키포인트는 제거
+    pcl::PassThrough<pcl::PointXYZI> pass;
+    pass.setInputCloud (currkeypoints);
+    pass.setFilterFieldName ("x");
+    pass.setFilterLimits (localMapPose.position.x - (2*Local_map_boundary/3), localMapPose.position.x + (2*Local_map_boundary/3));
+    pass.filter (*currkeypoints);
+
+    pass.setFilterFieldName ("y");
+    pass.setFilterLimits (localMapPose.position.y - (2*Local_map_boundary/3), localMapPose.position.y + (2*Local_map_boundary/3));
+    pass.filter (*currkeypoints);
+
+    pass.setFilterFieldName ("z");
+    pass.setFilterLimits (localMapPose.position.z - 10.0, localMapPose.position.z + 10.0);
+    pass.filter (*currkeypoints);
+
+    // RoPS 디스크립터
+    
+    // Perform triangulation.
+    pcl::PointCloud<pcl::PointXYZINormal>::Ptr cloudNormals(new pcl::PointCloud<pcl::PointXYZINormal>);
+	pcl::concatenateFields(*localMapPcl, *normals, *cloudNormals);
+	pcl::search::KdTree<pcl::PointXYZINormal>::Ptr kdtree2(new pcl::search::KdTree<pcl::PointXYZINormal>);
+	kdtree2->setInputCloud(cloudNormals);
+	pcl::GreedyProjectionTriangulation<pcl::PointXYZINormal> triangulation;
+	pcl::PolygonMesh triangles;
+	triangulation.setSearchRadius(2.0f);
+	triangulation.setMu(10.0);
+	triangulation.setMaximumNearestNeighbors(50);
+	triangulation.setMaximumSurfaceAngle(M_PI / 3); // 45 degrees.
+	triangulation.setNormalConsistency(false);
+	triangulation.setMinimumAngle(M_PI / 36); // 10 degrees.
+	triangulation.setMaximumAngle(2 * M_PI / 3); // 120 degrees.
+	triangulation.setInputCloud(cloudNormals);
+	triangulation.setSearchMethod(kdtree2);
+	triangulation.reconstruct(triangles);
+    pcl::io::savePolygonFileVTK("/home/vision/catkin_ws/dd.vtk", triangles);
+
+    pcl::ROPSEstimation<pcl::PointXYZI, pcl::Histogram<135>> rops;
+	rops.setInputCloud(currkeypoints); 
+	rops.setSearchMethod(treeNe);
+    rops.setSearchSurface(localMapPcl);
+	rops.setRadiusSearch(rops_RadiusSearch);
+	rops.setTriangles(triangles.polygons);
+	rops.setNumberOfPartitionBins(rops_NumberOfPartitionBins);
+	rops.setNumberOfRotations(rops_NumberOfRotations);
+	rops.setSupportRadius(rops_SupportRadius); //이게 25mr(mesh resolution)이어야 한다. 즉, support_radius = 0.0285f;일 때 
+    //setRadiusSearch == setSupportRadius로 세팅되어 있다. 실험해볼 것
+    // 즉, 일단 대략적인 mesh resolution이 필요하다. 위의 save로 vik를 받아갔으니, 집에서 열어볼 것
+    pcl::PointCloud<pcl::Histogram<135>>::Ptr descriptors(new pcl::PointCloud<pcl::Histogram<135>>());
+	rops.compute(*descriptors);
+
+    cout << "|| ISS : CurrentKeyFrameNum:" << KeyFrameNum << " || KeypointsVector's size: " << globalKeypointsVector.size() << " || Keypoint's num : " << currkeypoints->points.size() << "|| descriptor : currkeypoint's size:" << currkeypoints->size() << " || Features num: " << descriptors->size() << " || Features's size: " << descriptors->points[0].descriptorSize() << endl;// << shotFeatures->points[0] << endl;
+    pcl::PointCloud<pcl::PointXYZI>::Ptr KeyPointCashe(new pcl::PointCloud<pcl::PointXYZI>);
+    pcl::copyPointCloud(*currkeypoints, *KeyPointCashe);
+    globalKeypointBuf.lock();
+    globalKeypointsVector.push_back(std::make_tuple(KeyPointCashe, localMapPose, descriptors));
+    globalKeypointsVectorSize = globalKeypointsVector.size();
+    globalKeypointBuf.unlock();
+
+    // localkeypointsVector에 빈 요소들 추가
+    pcl::PointCloud<pcl::PointXYZI>::Ptr localkeypointCashe(new pcl::PointCloud<pcl::PointXYZI>);
+    // geometry_msgs::Pose* localkeypointPoseCashe = new geometry_msgs::Pose();
+    pcl::PointCloud<pcl::Histogram<135>>::Ptr localkeypointDescriptorsCashe(new pcl::PointCloud<pcl::Histogram<135>>());
+    localkeypointsVector.push_back(std::make_tuple(localkeypointCashe, localMapPose, localkeypointDescriptorsCashe)); // -> keypointsVector에 tuple 헤더 : #include <tuple> 로 디스크립터도 묶어야할듯
+
+    // sensor_msgs::PointCloud2 keyPointMsg;
+    // pcl::toROSMsg(*currkeypoints, keyPointMsg);
+    // keyPointMsg.header.frame_id = "/camera_init";
+    // pubKeyPointResult.publish(keyPointMsg);
+}
+
+void keyPointDetectionHarris(void) {
+    mLocalMapBuf.lock();
+    auto localMapPcl = localMapPclQue.front();
+    auto localMapPose = localMapPoseQue.front();
+    localMapPclQue.pop();
+    localMapPoseQue.pop();
+    mLocalMapBuf.unlock();
+
+    // NormalEstimation
+    pcl::PointCloud<pcl::Normal>::Ptr normals(new pcl::PointCloud<pcl::Normal>);
+    pcl::NormalEstimation<pcl::PointXYZI, pcl::Normal> ne;
+    pcl::search::KdTree<pcl::PointXYZI>::Ptr treeNe(new pcl::search::KdTree<pcl::PointXYZI> ());
+    ne.setSearchMethod(treeNe);
+    ne.setKSearch(0);
+    ne.setViewPoint(localMapPose.position.x, localMapPose.position.y, localMapPose.position.z);
+    ne.setRadiusSearch(1.5f); // 1
+    ne.setInputCloud(localMapPcl);
+    ne.compute(*normals);
+
     // HarrisKeypoint3D 추출
     pcl::PointCloud<pcl::PointXYZI>::Ptr currkeypoints(new pcl::PointCloud<PointType>);
     pcl::HarrisKeypoint3D <pcl::PointXYZI, pcl::PointXYZI> detector;
     detector.setNonMaxSupression (true);
     detector.setInputCloud (localMapPcl);
-    detector.setRadiusSearch(50);
+    detector.setRadiusSearch(100);
     detector.setRadius (2.0f);
     detector.setThreshold (HarrisThreshold);
     detector.setNormals(normals);
@@ -497,11 +602,11 @@ void keypointClusterAndMerge( int startIdx ) {
         *DescriptorsMergeMapCache += *get<2>(globalKeypointsVector[i]);
     }
 
-    auto [localKeypointsMap, localDescriptorsMap] = euclideanClustering(KeypointsMergeMapCache, DescriptorsMergeMapCache, 0.2, 4);
+    auto [localKeypointsMap, localDescriptorsMap] = euclideanClustering(KeypointsMergeMapCache, DescriptorsMergeMapCache, 0.15, 3);
 
     int searchStratIdx = 0;
-    if (startIdx > 60) {
-        searchStratIdx = startIdx - 60;
+    if (startIdx > 40) {
+        searchStratIdx = startIdx - 40;
     }
 
     for (int i = 0; i < localKeypointsMap->size(); i++) {
@@ -535,7 +640,7 @@ void mergelocalkeypointsVectorPoints( void ) {
     int searchStratIdx = localkeypointsVector.size() - 50;
     if (searchStratIdx < 50) { searchStratIdx = 0; }
     for(int i = searchStratIdx; i < (localkeypointsVector.size()); i++) {
-        auto [currentPointCache, currentDescriptorCache] = euclideanClustering(get<0>(localkeypointsVector[i]), get<2>(localkeypointsVector[i]), 1.0, 1);
+        auto [currentPointCache, currentDescriptorCache] = euclideanClustering(get<0>(localkeypointsVector[i]), get<2>(localkeypointsVector[i]), 0.5, 1);
         get<0>(localkeypointsVector[i]) = currentPointCache;
         get<2>(localkeypointsVector[i]) = currentDescriptorCache;
     }
@@ -587,7 +692,7 @@ void KeypointDetectionProcess(void) {
             mLocalMapBuf.unlock();
             cout << "[keyPointDetection] for " << globalKeypointsVectorSize + 1 << " odom node" << endl;
             if (Detector == "ISS") {
-                // keyPointDetectionISS();
+                keyPointDetectionISS();
             }
             else if (Detector == "Harris") {
                 keyPointDetectionHarris();
@@ -648,7 +753,7 @@ int main(int argc, char **argv)
     pubKeyPointResult = nh.advertise<aloam_velodyne::PointCloud2List>("/keyPointResult", 100);
     // pubKeyPointDisplay = nh.advertise<sensor_msgs::PointCloud2>("/keyPointDisplay", 100);
 
-    std::thread threadSC(ScancontextProcess);
+    // std::thread threadSC(ScancontextProcess);
     std::thread threadKP(KeypointDetectionProcess);
 
  	ros::spin();

@@ -171,12 +171,12 @@ double recentOptimizedY = 0.0;
 
 float LocalMapBoundary = 30.0; // pubLocalMap
 int currentUpdateIdx = 0; // pubLocalMap
-int localMapProcesseRange = 5; // int localMapSize = 6;, must Odd numbers // pubLocalMap
+int localMapProcesseRange = 7; // int localMapSize = 6;, must Odd numbers // pubLocalMap
 int localMapProcessedIdx = 0; // pubLocalMap
 int keypointsVectorSize = 0;
 
 ros::Publisher pubMapAftPGO, pubOdomAftPGO, pubPathAftPGO, pubKeyPointglobal, pubKeyLocalMap, pubKeyPointlocal, pubKeyPointglobalGraph, pubKeyPointlocalGraph;
-ros::Publisher pubLoopScanLocal, pubLoopSubmapLocal, pubConstraintEdge, pubHandlc, pubLoopIcpResult;//, pubLoopIcpResult;
+ros::Publisher pubLoopScanLocal, pubLoopSubmapLocal, pubConstraintEdge, pubHandlc, pubLoopIcpResult, pubDisplayLocalMap;//, pubLoopIcpResult;
 ros::Publisher pubOdomRepubVerifier;
 ros::Publisher pubKeyFrameDS, pubDetectTrigger;
 
@@ -842,13 +842,6 @@ pcl::PointXYZ pointToPCL(const Pose6D& pose) {
     return pcl_point;
 }
 
-float ISS_SalientRadius = 10;
-float ISS_NonMaxRadius = 6;
-float ISS_Gamma21 = 0.9;
-float ISS_Gamma23 = 0.9;
-int ISS_MinNeighbors = 10;
-int Local_map_idx = 6;
-
 void pubLocalMap(void) {
     while (currentUpdateIdx <= recentIdxUpdated) {
         mKF.lock();
@@ -900,6 +893,13 @@ void pubLocalMap(void) {
         downSizeFilterLocalMap.setInputCloud(localMap);
         downSizeFilterLocalMap.filter(*localMap);
 
+        // 이상치 제거 (Statistical Outlier Removal)
+        pcl::StatisticalOutlierRemoval<pcl::PointXYZI> sor;
+        sor.setInputCloud(localMap);
+        sor.setMeanK(50); // 주변 이웃의 수
+        sor.setStddevMulThresh(1.0); // 표준 편차의 배수
+        sor.filter(*localMap);
+
         aloam_velodyne::LocalMapAndPose LocalMapAndPoseMsg;
         // cout << localMapProcessedIdx << endl;
         geometry_msgs::Pose rosPose = gtsamPoseToROSPose(keyframePosesUpdated[localMapProcessedIdx]);
@@ -912,6 +912,11 @@ void pubLocalMap(void) {
         LocalMapAndPoseMsg.point_cloud = localMapMsg;
 
         pubKeyLocalMap.publish(LocalMapAndPoseMsg);
+
+        // sensor_msgs::PointCloud2 KeypointMsg;
+        // pcl::toROSMsg(*globalkeypointvis, KeypointMsg);
+        // KeypointMsg.header.frame_id = "/camera_init";
+        pubDisplayLocalMap.publish(localMapMsg);
 
         currentUpdateIdx++;
         localMapProcessedIdx++;
@@ -1037,9 +1042,9 @@ void pubKeyPoint(void) {
     int gloabalPointSize = 0;
     int localPointSize = 0;
     mKeyPoint.lock();
-    if ( keypointsVectorSize > 50 ){
+    if ( keypointsVectorSize > 35 ){
         // gloabalMapAndDescriptorsMsg.size = keypointsVectorSize-50;
-        for (int node_idx=0; node_idx < keypointsVectorSize-50; node_idx++) {
+        for (int node_idx=0; node_idx < keypointsVectorSize-35; node_idx++) {
             *globalkeypointvis += *local2global(keypointsVector[node_idx], keyframePosesUpdated[node_idx]);//*keypointsVector[node_idx];
             std_msgs::Float64MultiArray descriptorsCashe;
             for (int a = 0; a < keypointsVector[node_idx]->size(); a++){
@@ -1049,7 +1054,7 @@ void pubKeyPoint(void) {
         }
         gloabalMapAndDescriptorsMsg.size = gloabalPointSize;
         // localMapAndDescriptorsMsg.size = 50;
-        for (int node_idx=keypointsVectorSize-50; node_idx < keypointsVectorSize; node_idx++) {
+        for (int node_idx=keypointsVectorSize-35; node_idx < keypointsVectorSize; node_idx++) {
             *localkeypointvis += *local2global(keypointsVector[node_idx], keyframePosesUpdated[node_idx]);//*keypointsVector[node_idx];
             for (int a = 0; a < keypointsVector[node_idx]->size(); a++){
                 localMapAndDescriptorsMsg.descriptors.descriptor.push_back(descriptorsVector[node_idx].descriptor[a]);
@@ -1166,7 +1171,7 @@ int main(int argc, char **argv)
     downSizeFilterLocalMap.setLeafSize(localMapFilterSize, localMapFilterSize, localMapFilterSize);
 
     double mapVizFilterSize;
-	nh.param<double>("mapviz_filter_size", mapVizFilterSize, 0.4); // pose assignment every k frames 
+	nh.param<double>("mapviz_filter_size", mapVizFilterSize, 0.2); // pose assignment every k frames 
     downSizeFilterMapPGO.setLeafSize(mapVizFilterSize, mapVizFilterSize, mapVizFilterSize);
     
 
@@ -1184,6 +1189,7 @@ int main(int argc, char **argv)
     pubKeyPointglobal = nh.advertise<sensor_msgs::PointCloud2>("/LGM_keypointGlobal", 100);
     pubKeyPointlocal = nh.advertise<sensor_msgs::PointCloud2>("/LGM_keypointLocal", 100);
     pubKeyLocalMap = nh.advertise<aloam_velodyne::LocalMapAndPose>("/LGMLocalMap", 100);
+    pubDisplayLocalMap = nh.advertise<sensor_msgs::PointCloud2>("/DisplayLGMLocalMap", 100);
 
     pubKeyPointglobalGraph = nh.advertise<aloam_velodyne::MapAndDescriptors>("/keypointGlobalGraph", 100);
     pubKeyPointlocalGraph = nh.advertise<aloam_velodyne::MapAndDescriptors>("/keypointLocalGraph", 100);

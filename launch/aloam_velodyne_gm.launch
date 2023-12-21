@@ -1,37 +1,37 @@
 <launch>
     
-    <param name="scan_line" type="int" value="64" />
+    <param name="scan_line" type="int" value="32" />
 
     <!-- if 1, do mapping 10 Hz, if 2, do mapping 5 Hz. Suggest to use 1, it will adjust frequence automaticlly -->
-    <param name="mapping_skip_frame" type="int" value="1" />
+    <param name="mapping_skip_frame" type="int" value="0.5" />
 
     <!-- remove too closed points -->
-    <param name="minimum_range" type="double" value="5"/>
+    <param name="minimum_range" type="double" value="1"/>
 
-    <param name="mapping_line_resolution" type="double" value="0.1"/> <!-- A-LOAM -->
-    <param name="mapping_plane_resolution" type="double" value="0.2"/> <!-- A-LOAM -->
+    <param name="mapping_line_resolution" type="double" value="0.05"/> <!-- A-LOAM -->
+    <param name="mapping_plane_resolution" type="double" value="0.1"/> <!-- A-LOAM -->
 
-    <param name="LocalMapBoundary" type="double" value="30.0"/>
-    <param name="ISS_SalientRadius" type="double" value="15"/>
-    <param name="ISS_NonMaxRadius" type="double" value="15"/>
-    <param name="ISS_Gamma21" type="double" value="0.5"/>
-    <param name="ISS_Gamma23" type="double" value="0.5"/>
-    <param name="ISS_MinNeighbors" type="int" value="20"/>
-    <param name="Detector" type="string" value="Harris"/> <!--SIFT, ISS, Harris-->
+    <param name="LocalMapBoundary" type="double" value="15.0"/>
+    <param name="ISS_SalientRadius" type="double" value="10"/>
+    <param name="ISS_NonMaxRadius" type="double" value="10"/>
+    <param name="ISS_Gamma21" type="double" value="0.9"/>
+    <param name="ISS_Gamma23" type="double" value="0.9"/>
+    <param name="ISS_MinNeighbors" type="int" value="10"/>
+    <param name="Detector" type="string" value="ISS"/> <!--SIFT, ISS, Harris-->
 
-    <param name="HarrisRadius" type="double" value="2.0"/>
-    <param name="HarrisRadiusSearch" type="double" value="50"/>
-    <param name="HarrisThreshold" type="double" value="1e-6"/>
-    <!-- <param name="HarrisThreshold" type="double" value="1e-9"/>
-    <param name="HarrisThreshold" type="double" value="1e-9"/> -->
+    <param name="HarrisRadius" type="double" value="0.2"/>
+    <param name="HarrisRadiusSearch" type="double" value="100"/>
+    <param name="HarrisThreshold" type="double" value="1e-10"/>
 
-    <param name="rops_RadiusSearch" type="double" value="3.0"/>
+    <param name="rops_RadiusSearch" type="double" value="10.0"/>
     <param name="rops_NumberOfPartitionBins" type="int" value="5"/>
     <param name="rops_NumberOfRotations" type="int" value="3"/>
-    <param name="rops_SupportRadius" type="double" value="3.0"/>
+    <param name="rops_SupportRadius" type="double" value="10.0"/>
 
     <!-- SC-A-LOAM -->
-    <param name="keyframe_meter_gap" type="double" value="3.0"/> 
+    <param name="keyframe_meter_gap" type="double" value="2.0"/> 
+
+    <param name="mapviz_filter_size" type="double" value="0.05"/> 
 
     <!-- Scan Context -->
     <param name="sc_dist_thres" type="double" value="0.2"/> <!-- SC-A-LOAM, if want no outliers, use 0.1-0.15 -->
@@ -42,7 +42,7 @@
     <param name="save_directory" type="string" value="/home/user/Documents/scaloam_scd_saver/data/00/"/>  <!-- CHANGE THIS and end with / -->
 
     <!--  -->
-    <param name="lidar_type" type="string" value="HDL64"/> 
+    <param name="lidar_type" type="string" value="HDL32"/> 
     <remap from="/velodyne_points" to="/velodyne_points"/>
 
     <node pkg="aloam_velodyne" type="ascanRegistration" name="ascanRegistration" output="screen" />
