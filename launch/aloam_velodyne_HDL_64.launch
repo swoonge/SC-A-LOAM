@@ -11,7 +11,7 @@
     <param name="mapping_line_resolution" type="double" value="0.1"/> <!-- A-LOAM -->
     <param name="mapping_plane_resolution" type="double" value="0.2"/> <!-- A-LOAM -->
 
-    <param name="LocalMapBoundary" type="double" value="30.0"/>
+    <param name="LocalMapBoundary" type="double" value="25.0"/>
     <param name="ISS_SalientRadius" type="double" value="15"/>
     <param name="ISS_NonMaxRadius" type="double" value="15"/>
     <param name="ISS_Gamma21" type="double" value="0.5"/>
@@ -19,9 +19,9 @@
     <param name="ISS_MinNeighbors" type="int" value="20"/>
     <param name="Detector" type="string" value="Harris"/> <!--SIFT, ISS, Harris-->
 
-    <param name="HarrisRadius" type="double" value="2.0"/>
-    <param name="HarrisRadiusSearch" type="double" value="50"/>
-    <param name="HarrisThreshold" type="double" value="1e-6"/>
+    <param name="HarrisRadius" type="double" value="1.0"/>
+    <param name="HarrisRadiusSearch" type="double" value="30"/>
+    <param name="HarrisThreshold" type="double" value="1e-8"/>
     <!-- <param name="HarrisThreshold" type="double" value="1e-9"/>
     <param name="HarrisThreshold" type="double" value="1e-9"/> -->
 
@@ -49,7 +49,7 @@
     <node pkg="aloam_velodyne" type="alaserOdometry" name="alaserOdometry" output="screen" />
     <node pkg="aloam_velodyne" type="alaserMapping" name="alaserMapping" output="screen" />
     <node pkg="aloam_velodyne" type="alaserPGO" name="alaserPGO" output="screen" />
-    <node pkg="aloam_velodyne" type="alaserScDetector" name="alaserScDetector" output="screen" />
+    <!-- <node pkg="aloam_velodyne" type="alaserScDetector" name="alaserScDetector" output="screen" /> -->
 
     <arg name="rviz" default="true" />
     <group if="$(arg rviz)">

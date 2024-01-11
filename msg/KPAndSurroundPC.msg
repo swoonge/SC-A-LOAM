@@ -1,0 +1,2 @@
+sensor_msgs/PointCloud2 keypoint_point_cloud
+sensor_msgs/PointCloud2 surround_point_cloud

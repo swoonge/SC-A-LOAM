@@ -354,7 +354,7 @@ void keyPointDetectionISS(void) {
 	triangulation.setInputCloud(cloudNormals);
 	triangulation.setSearchMethod(kdtree2);
 	triangulation.reconstruct(triangles);
-    pcl::io::savePolygonFileVTK("/home/vision/catkin_ws/dd.vtk", triangles);
+    // pcl::io::savePolygonFileVTK("/home/vision/catkin_ws/dd.vtk", triangles);
 
     pcl::ROPSEstimation<pcl::PointXYZI, pcl::Histogram<135>> rops;
 	rops.setInputCloud(currkeypoints); 
@@ -444,9 +444,9 @@ void keyPointDetectionHarris(void) {
 	kdtree2->setInputCloud(cloudNormals);
 	pcl::GreedyProjectionTriangulation<pcl::PointXYZINormal> triangulation;
 	pcl::PolygonMesh triangles;
-	triangulation.setSearchRadius(2.0f);
-	triangulation.setMu(10.0);
-	triangulation.setMaximumNearestNeighbors(50);
+	triangulation.setSearchRadius(0.3f);
+	triangulation.setMu(3.0);
+	triangulation.setMaximumNearestNeighbors(30);
 	triangulation.setMaximumSurfaceAngle(M_PI / 3); // 45 degrees.
 	triangulation.setNormalConsistency(false);
 	triangulation.setMinimumAngle(M_PI / 36); // 10 degrees.

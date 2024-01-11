@@ -27,6 +27,8 @@ add_message_files(
   PointCloud2List.msg
   Float64MultiArrayArray.msg
   MapAndDescriptors.msg
+  KPAndSurroundPC.msg
+  KPAndDescriptor.msg
 )
 
 generate_messages(
@@ -76,6 +78,12 @@ add_executable(alaserScDetector
   src/scLoopDetector.cpp
   include/scancontext/Scancontext.cpp
 )
+add_executable(alaserMatcher 
+  src/localGlobalMatcing.cpp
+)
+add_executable(alaserDescriptor 
+  src/localGlobalDescriptor.cpp
+)
 target_compile_options(alaserPGO 
   PRIVATE ${OpenMP_CXX_FLAGS}
 )
@@ -88,6 +96,22 @@ target_compile_options(alaserScDetector
   PRIVATE ${OpenMP_CXX_FLAGS}
 )
 target_link_libraries(alaserScDetector 
+  ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${CERES_LIBRARIES}
+  ${OpenMP_CXX_FLAGS}
+  gtsam
+)
+target_compile_options(alaserMatcher 
+  PRIVATE ${OpenMP_CXX_FLAGS}
+)
+target_link_libraries(alaserMatcher 
+  ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${CERES_LIBRARIES}
+  ${OpenMP_CXX_FLAGS}
+  gtsam
+)
+target_compile_options(alaserDescriptor 
+  PRIVATE ${OpenMP_CXX_FLAGS}
+)
+target_link_libraries(alaserDescriptor 
   ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${CERES_LIBRARIES}
   ${OpenMP_CXX_FLAGS}
   gtsam
