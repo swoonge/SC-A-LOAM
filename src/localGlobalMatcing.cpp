@@ -97,6 +97,8 @@ int KeypointMergingProcessRange[2] = {0, 0};
 std::mutex mtxkeyPoseIdxPointCloudGFVector;
 std::mutex mtxPoseArray;
 
+pcl::VoxelGrid<PointType> downSizeFilter;
+
 // 기타 array, pointcloud, vector, queue 선언
 geometry_msgs::PoseArray allPoseArray;
 pcl::PointCloud<PointType>::Ptr clusteredGlobalKP(new pcl::PointCloud<PointType>());
@@ -499,6 +501,8 @@ void keypointMergingProcessrangeCal( void ) {
 void KeypointMergingProcess( void ) {
     float frequency = 10.0; // can change 
     ros::Rate rate(frequency);
+    int processtimeN = 0;
+    double processtimetotal = 0;
     while (ros::ok()){
         if (keyPointExtractionCount == 0) {
             continue;
@@ -517,17 +521,24 @@ void KeypointMergingProcess( void ) {
         keypointMergingProcessrangeCal();
 
         pcl::PointCloud<PointType>::Ptr globalKPCache(new pcl::PointCloud<PointType>); // globalKPCache: KeypointMergingProcessRange를 합친 PC
+        pcl::PointCloud<PointType>::Ptr globalPCCache(new pcl::PointCloud<PointType>); // globalKPCache: KeypointMergingProcessRange를 합친 PC
+        globalKPCache->clear();
         // pcl::PointCloud<PointType>::Ptr globalPCCache(new pcl::PointCloud<PointType>); // globalKPCache: KeypointMergingProcessRange를 합친 PC
         for (int node_idx = KeypointMergingProcessRange[0]; node_idx < KeypointMergingProcessRange[1]; node_idx++) {
+            // cout << "[ㅐㅐㅐㅐㅐㅐㅐㅐㅐㅐㅐㅐㅐㅐㅐㅐㅐㅐㅐㅐㅐㅐ]" << KeyPoseKeyPointsGFVector[node_idx]->points.size() << endl;
             *globalKPCache += *KeyPoseKeyPointsGFVector[node_idx];
+            *globalPCCache += *get<1>(keyPoseIdxPointCloudGFVector[node_idx]);
         }
-
+        downSizeFilter.setInputCloud(globalPCCache);
+        downSizeFilter.filter(*globalPCCache);
+        // cout << globalKPCache->points.size() << endl;
         auto clusteredKPCache = euclideanClusteringOnlyClusters(globalKPCache, 0.1, 4);
         
         for (int i = 0; i < clusteredKPCache->size(); i++) {
             auto cpoint = clusteredKPCache->points[i];
             int minIdx = 0;
             double minDistanceCache = 100000.0;
+            
             for (int node_idx = KeypointMergingProcessRange[0]; node_idx < KeypointMergingProcessRange[1]; node_idx++) {
                     geometry_msgs::Pose PoseCache = get<2>(keyPoseIdxPointCloudGFVector[node_idx]);
                     double distance = std::sqrt(std::pow(PoseCache.position.x - cpoint.x, 2) +
@@ -539,22 +550,28 @@ void KeypointMergingProcess( void ) {
                     }
             }
             pcl::PointCloud<PointType>::Ptr surroundPC(new pcl::PointCloud<PointType>);
-            *surroundPC = saveClosedPointCloud(*globalKPCache, cpoint, 4.0);
+            *surroundPC = saveClosedPointCloud(*globalPCCache, cpoint, 4.0);
+            if (surroundPC->points.size() < 10) {
+                continue;
+            }
             // if (surroundPC->points.size)
             pcl::PointCloud<PointType>::Ptr KPCache(new pcl::PointCloud<PointType>);
-            // cout<<"!!!!!!!!!!!!!!!!!!!!         "<< surroundPC->points.size() <<" || "<<get<1>(keyPoseIdxPointCloudGFVector[minIdx])->points.size() <<endl;
+            // cout<<"!!!!!!!!!!!!!!!!!!!!         "<< globalPCCache->points.size()<<  " || "<< surroundPC->points.size() <<" || "<< saveClosedPointCloud(*globalPCCache, cpoint, 4.0).points.size() <<endl;
             KPCache->points.push_back(cpoint);
             pcl::PointXYZI cpose;
             cpose.x = get<2>(keyPoseIdxPointCloudGFVector[minIdx]).position.x;
             cpose.y = get<2>(keyPoseIdxPointCloudGFVector[minIdx]).position.y;
             cpose.z = get<2>(keyPoseIdxPointCloudGFVector[minIdx]).position.z;
             KPCache->points.push_back(cpose);
+
             KeyPointsWithSurroundsGFPairVector.push_back(std::make_tuple(KPCache, surroundPC));
         }
 
         auto end_time0 = std::chrono::high_resolution_clock::now();
         auto duration0 = std::chrono::duration_cast<std::chrono::microseconds>(end_time0 - start_time0);
-        cout << "    [MergingProcess] coverage: " << KeypointMergingProcessRange[0] << "~" << KeypointMergingProcessRange[1] << " || clusterPointNum: " << clusteredKPCache->size() << " || All Keypoints: " << KeyPointsWithSurroundsGFPairVector.size() << " || process time: " << duration0.count()/1000.0 << "(ms)" << endl;
+        processtimetotal += duration0.count()/1000.0;
+        processtimeN++;
+        cout << "    [MergingProcess] coverage: " << KeypointMergingProcessRange[0] << "~" << KeypointMergingProcessRange[1] << " || clusterPointNum: " << clusteredKPCache->size() << " || All Keypoints: " << KeyPointsWithSurroundsGFPairVector.size() << " || process time: " << processtimetotal/processtimeN << "(ms)" << endl;
         
         // int rangeCache = 0;
         // rangeCache = KeypointMergingProcessRange[1] + 20;
@@ -589,6 +606,8 @@ void KeypointMergingProcess( void ) {
 void KeypointDetectionProcess( void ) {
     float frequency = 10.0; // can change 
     ros::Rate rate(frequency);
+    int processtimeN = 0;
+    double processtimetotal = 0;
     while (ros::ok()){
         mtxkeyPoseIdxPointCloudGFVector.lock();
         // keyPoseIdxPointCloudGFQue에 데이터가 있다면 실행
@@ -631,7 +650,10 @@ void KeypointDetectionProcess( void ) {
             auto end_time = std::chrono::high_resolution_clock::now();
             auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
             // cout << "point size : " << localMapPcl->size() << endl;
-            cout << "[DetectionProcess] processed/Que " << keyPointExtractionCount << "/" << keyPoseIdxPointCloudGFVectorSize << " || keypoint Num: " << currkeypoints->points.size() << " || process time: " << duration.count()/1000.0 << "(ms)" << endl;
+
+            processtimetotal += duration.count()/1000.0;
+            processtimeN++;
+            cout << "[DetectionProcess] processed/Que " << keyPointExtractionCount << "/" << keyPoseIdxPointCloudGFVectorSize << " || keypoint Num: " << currkeypoints->points.size() << " || process time: " << processtimetotal/processtimeN << "(ms)" << endl;
         }
         else{
             mtxkeyPoseIdxPointCloudGFVector.unlock();
@@ -712,6 +734,9 @@ int main(int argc, char **argv)
     nh.param<int>("rops_NumberOfPartitionBins", rops_NumberOfPartitionBins, 5);
     nh.param<int>("rops_NumberOfRotations", rops_NumberOfRotations, 3); 
     nh.param<float>("rops_SupportRadius", rops_SupportRadius, 1.0);
+
+    float FilterSize = 0.1;
+    downSizeFilter.setLeafSize(FilterSize, FilterSize, FilterSize);
 
     ros::Subscriber subKeyLocalMap = nh.subscribe<aloam_velodyne::LocalMapAndPose>("/LGMLocalMap", 100, LocalMapHandler);
     // ros::Subscriber subAllPose = nh.subscribe<geometry_msgs::PoseArray>("/LGMAllPose", 100, PoseHandler);
