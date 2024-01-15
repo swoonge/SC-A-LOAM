@@ -147,114 +147,82 @@ void KeypointDescriptorDetectionProcess( void ) {
                 PCL_ERROR("Couldn't read file 'point_cloud_KP.pcd'\n");
             }
 
-            float triangulation_SearchRadiustest[] = { 1.0, 2.0, 3.0 };
-            float triangulation_Mutest[] = { 5.0, 7.0, 10.0 };
-            int triangulation_MaximumNearestNeighborstest[] = { 50, 70, 100 };
+            // cout << "포인트 개수: " << SorroundPC->points.size() << " || " << KPPC->points.size() << endl;
+            pcl::PointCloud<pcl::Normal>::Ptr normals(new pcl::PointCloud<pcl::Normal>);
+            pcl::NormalEstimation<pcl::PointXYZI, pcl::Normal> ne;
+            pcl::search::KdTree<pcl::PointXYZI>::Ptr treeNe(new pcl::search::KdTree<pcl::PointXYZI> ());
+            ne.setSearchMethod(treeNe);
+            ne.setKSearch(0);
+            ne.setViewPoint(KPPC->points[1].x, KPPC->points[1].y, KPPC->points[1].z);// 뷰포인트가 이게 아니다. keypose를 가져와야된다.
+            ne.setRadiusSearch(1.0f); // 1
+            ne.setInputCloud(SorroundPC);
+            ne.compute(*normals);
 
-            for (const auto &triangulation_SearchRadius : triangulation_SearchRadiustest) {
-                for (const auto &triangulation_Mu : triangulation_Mutest) {
-                    for (const auto &triangulation_MaximumNearestNeighbors : triangulation_MaximumNearestNeighborstest) {
-                        // cout << "포인트 개수: " << SorroundPC->points.size() << " || " << KPPC->points.size() << endl;
-                        pcl::PointCloud<pcl::Normal>::Ptr normals(new pcl::PointCloud<pcl::Normal>);
-                        pcl::NormalEstimation<pcl::PointXYZI, pcl::Normal> ne;
-                        pcl::search::KdTree<pcl::PointXYZI>::Ptr treeNe(new pcl::search::KdTree<pcl::PointXYZI> ());
-                        ne.setSearchMethod(treeNe);
-                        ne.setKSearch(0);
-                        ne.setViewPoint(KPPC->points[1].x, KPPC->points[1].y, KPPC->points[1].z);// 뷰포인트가 이게 아니다. keypose를 가져와야된다.
-                        ne.setRadiusSearch(1.0f); // 1
-                        ne.setInputCloud(SorroundPC);
-                        ne.compute(*normals);
+            // Perform triangulation.
+            pcl::PointCloud<pcl::PointXYZINormal>::Ptr cloudNormals(new pcl::PointCloud<pcl::PointXYZINormal>);
+            pcl::concatenateFields(*SorroundPC, *normals, *cloudNormals);
+            pcl::search::KdTree<pcl::PointXYZINormal>::Ptr kdtree2(new pcl::search::KdTree<pcl::PointXYZINormal>);
+            kdtree2->setInputCloud(cloudNormals);
+            pcl::GreedyProjectionTriangulation<pcl::PointXYZINormal> triangulation;
+            pcl::PolygonMesh triangles;
+            triangulation.setSearchRadius(triangulation_SearchRadius);
+            triangulation.setMu(triangulation_Mu);
+            triangulation.setMaximumNearestNeighbors(triangulation_MaximumNearestNeighbors);
+            triangulation.setMaximumSurfaceAngle(M_PI / 4); // 45 degrees.
+            triangulation.setNormalConsistency(false);
+            triangulation.setMinimumAngle(M_PI / 18); // 10 degrees.
+            triangulation.setMaximumAngle(2 * M_PI / 3); // 120 degrees.
+            triangulation.setInputCloud(cloudNormals);
+            triangulation.setSearchMethod(kdtree2);
+            triangulation.reconstruct(triangles);
+            // pcl::io::savePolygonFileVTK("/home/vision/catkin_ws/SearchRadius003Mu25Ne50.vtk", triangles);
 
-                        // Perform triangulation.
-                        pcl::PointCloud<pcl::PointXYZINormal>::Ptr cloudNormals(new pcl::PointCloud<pcl::PointXYZINormal>);
-                        // pcl::concatenateFields(*SorroundPC, *normals, *cloudNormals);
-                        // pcl::search::KdTree<pcl::PointXYZINormal>::Ptr kdtree2(new pcl::search::KdTree<pcl::PointXYZINormal>);
-                        // kdtree2->setInputCloud(cloudNormals);
-                        // pcl::GreedyProjectionTriangulation<pcl::PointXYZINormal> triangulation;
-                        // pcl::PolygonMesh triangles;
-                        // triangulation.setSearchRadius(0.3f);
-                        // triangulation.setMu(2.5);
-                        // triangulation.setMaximumNearestNeighbors(15);
-                        // triangulation.setMaximumSurfaceAngle(M_PI / 4); // 45 degrees.
-                        // triangulation.setNormalConsistency(false);
-                        // triangulation.setMinimumAngle(M_PI / 18); // 10 degrees.
-                        // triangulation.setMaximumAngle(2 * M_PI / 3); // 120 degrees.
-                        // triangulation.setInputCloud(cloudNormals);
-                        // triangulation.setSearchMethod(kdtree2);
-                        // triangulation.reconstruct(triangles);
-                        // pcl::io::savePolygonFileVTK("/home/vision/catkin_ws/dd.vtk", triangles);
+            pcl::PointCloud<PointType>::Ptr inputcloudCache(new pcl::PointCloud<PointType>);
+            inputcloudCache->points.push_back(KPPC->points[0]);
+            
+            pcl::ROPSEstimation<pcl::PointXYZI, pcl::Histogram<135>> rops;
+            rops.setInputCloud(inputcloudCache); 
+            rops.setSearchMethod(treeNe);
+            rops.setSearchSurface(SorroundPC);
+            rops.setRadiusSearch(rops_RadiusSearch);
+            rops.setTriangles(triangles.polygons);
+            rops.setNumberOfPartitionBins(rops_NumberOfPartitionBins);
+            rops.setNumberOfRotations(rops_NumberOfRotations);
+            rops.setSupportRadius(rops_SupportRadius); //이게 25mr(mesh resolution)이어야 한다. 즉, support_radius = 0.0285f;일 때 
+            //setRadiusSearch == setSupportRadius로 세팅되어 있다. 실험해볼 것
+            pcl::PointCloud<pcl::Histogram<135>>::Ptr descriptors(new pcl::PointCloud<pcl::Histogram<135>>());
+            rops.compute(*descriptors);
+            pointDescriptorProcessedCount++;
+            // cout << "end of ROPSEstimation: " << descriptors->points[0].descriptorSize() << endl;
 
-                        pcl::concatenateFields(*SorroundPC, *normals, *cloudNormals);
-                        pcl::search::KdTree<pcl::PointXYZINormal>::Ptr kdtree2(new pcl::search::KdTree<pcl::PointXYZINormal>);
-                        kdtree2->setInputCloud(cloudNormals);
-                        pcl::GreedyProjectionTriangulation<pcl::PointXYZINormal> triangulation;
-                        pcl::PolygonMesh triangles;
-                        triangulation.setSearchRadius(triangulation_SearchRadius);
-                        triangulation.setMu(triangulation_Mu);
-                        triangulation.setMaximumNearestNeighbors(triangulation_MaximumNearestNeighbors);
-                        triangulation.setMaximumSurfaceAngle(M_PI / 4); // 45 degrees.
-                        triangulation.setNormalConsistency(false);
-                        triangulation.setMinimumAngle(M_PI / 18); // 10 degrees.
-                        triangulation.setMaximumAngle(2 * M_PI / 3); // 120 degrees.
-                        triangulation.setInputCloud(cloudNormals);
-                        triangulation.setSearchMethod(kdtree2);
-                        triangulation.reconstruct(triangles);
+            auto end_time = std::chrono::high_resolution_clock::now();
+            auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
+            processtimetotal += duration.count()/1000.0;
+            processtimeN++;
 
-                        std::string vtxFileName = "/home/vision/catkin_ws/SearchRadius" + std::to_string(triangulation_SearchRadius) + "Mu" + std::to_string(triangulation_Mu) + "Ne" + std::to_string(triangulation_MaximumNearestNeighbors) + ".vtk";
-                        pcl::io::savePolygonFileVTK(vtxFileName, triangles);
-                    }
-                }
+            //pub하기
+            aloam_velodyne::KPAndDescriptor KPDmsg;
+            
+            sensor_msgs::PointCloud2 KPmsg;
+            std_msgs::Float64MultiArray Dmsg;            
+            pcl::toROSMsg(*KPPC, KPmsg);
+
+            for (size_t i = 0; i < descriptors->points[0].descriptorSize(); i++) {
+                Dmsg.data.push_back(descriptors->points[0].histogram[i]);
             }
-            break;
-            
-            // pcl::PointCloud<PointType>::Ptr inputcloudCache(new pcl::PointCloud<PointType>);
-            // inputcloudCache->points.push_back(KPPC->points[0]);
-            
-            // pcl::ROPSEstimation<pcl::PointXYZI, pcl::Histogram<135>> rops;
-            // rops.setInputCloud(inputcloudCache); 
-            // rops.setSearchMethod(treeNe);
-            // rops.setSearchSurface(SorroundPC);
-            // rops.setRadiusSearch(rops_RadiusSearch);
-            // rops.setTriangles(triangles.polygons);
-            // rops.setNumberOfPartitionBins(rops_NumberOfPartitionBins);
-            // rops.setNumberOfRotations(rops_NumberOfRotations);
-            // rops.setSupportRadius(rops_SupportRadius); //이게 25mr(mesh resolution)이어야 한다. 즉, support_radius = 0.0285f;일 때 
-            // //setRadiusSearch == setSupportRadius로 세팅되어 있다. 실험해볼 것
-            // // 즉, 일단 대략적인 mesh resolution이 필요하다. 위의 save로 vik를 받아갔으니, 집에서 열어볼 것
-            // pcl::PointCloud<pcl::Histogram<135>>::Ptr descriptors(new pcl::PointCloud<pcl::Histogram<135>>());
-            // rops.compute(*descriptors);
-            // pointDescriptorProcessedCount++;
-            // // cout << "end of ROPSEstimation: " << descriptors->points[0].descriptorSize() << endl;
 
-            // auto end_time = std::chrono::high_resolution_clock::now();
-            // auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
-            // processtimetotal += duration.count()/1000.0;
-            // processtimeN++;
+            KPDmsg.keypoint_point_cloud = KPmsg;
+            KPDmsg.descriptor = Dmsg;
+            pubDescriptor.publish(KPDmsg);
 
-            // //pub하기
-            // aloam_velodyne::KPAndDescriptor KPDmsg;
-            
-            // sensor_msgs::PointCloud2 KPmsg;
-            // std_msgs::Float64MultiArray Dmsg;            
-            // pcl::toROSMsg(*KPPC, KPmsg);
+            sensor_msgs::PointCloud2 Smsg;
+            pcl::toROSMsg(*globalregienforDisplay, Smsg);
+            Smsg.header.frame_id = "/camera_init";
+            pubKeyregionDisplay.publish(Smsg);
 
-            // for (size_t i = 0; i < descriptors->points[0].descriptorSize(); i++) {
-            //     Dmsg.data.push_back(descriptors->points[0].histogram[i]);
-            // }
-
-            // KPDmsg.keypoint_point_cloud = KPmsg;
-            // KPDmsg.descriptor = Dmsg;
-            // pubDescriptor.publish(KPDmsg);
-
-            // sensor_msgs::PointCloud2 Smsg;
-            // pcl::toROSMsg(*globalregienforDisplay, Smsg);
-            // Smsg.header.frame_id = "/camera_init";
-            // pubKeyregionDisplay.publish(Smsg);
-
-            // cout << "[KeypointDescriptorDetectionProcess] 처리한 point 수: " << pointDescriptorProcessedCount << " || 남은 수: " << SorroundQue.size() << " || prcessing time: " << processtimetotal/processtimeN << "(ms)" << endl;
+            cout << "[KeypointDescriptorDetectionProcess] 처리한 point 수: " << pointDescriptorProcessedCount << " || 남은 수: " << SorroundQue.size() << " || prcessing time: " << processtimetotal/processtimeN << "(ms)" << endl;
         }
         rate.sleep();
-        break;
     }
     
 }

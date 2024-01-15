@@ -68,6 +68,7 @@
 #include <aloam_velodyne/PointCloud2List.h>
 #include <aloam_velodyne/Float64MultiArrayArray.h>
 #include <aloam_velodyne/KPAndSurroundPC.h>
+#include <aloam_velodyne/KPAndDescriptor.h>
 
 #include "aloam_velodyne/common.h"
 #include "aloam_velodyne/tic_toc.h"
@@ -107,7 +108,7 @@ std::vector<pcl::PointCloud<PointType>::Ptr> KeyPoseKeyPointsGFVector;
 std::vector<pcl::PointCloud<PointType>::Ptr> localMapVector;
 std::vector<std::tuple<int, pcl::PointCloud<PointType>::Ptr, geometry_msgs::Pose>> keyPoseIdxPointCloudGFVector;
 // std::vector<std::tuple<int, PointType, pcl::PointCloud<pcl::Histogram<135>>::Ptr>> globalKPandDCVector;
-std::vector<std::tuple<pcl::PointCloud<PointType>::Ptr, pcl::PointCloud<PointType>::Ptr>> KeyPointsWithSurroundsGFPairVector;
+std::vector<std::tuple<pcl::PointCloud<PointType>::Ptr, pcl::PointCloud<PointType>::Ptr, int, pcl::Histogram<135>>> KPwithInfo;
 
 template <typename PointT>
 pcl::PointCloud<PointType> saveClosedPointCloud(const pcl::PointCloud<PointT> &cloud_in, PointType centerPoint, float thres)
@@ -133,6 +134,7 @@ pcl::PointCloud<PointType> saveClosedPointCloud(const pcl::PointCloud<PointT> &c
     return cloud_out;
 }
 
+//xxx
 /**
  * @brief geometry_msgs::Pose -> Eigen::Affine3f 로 변환하는 함수
  * @param rosPose geometry_msgs::Pose 형식의 데이터.
@@ -156,6 +158,7 @@ Eigen::Affine3f rosPoseToEigenAffine(const geometry_msgs::Pose& rosPose) {
     return eigenAffine;
 }
 
+//xxx
 /**
  * @brief 로컬 좌표계의 PointCloud와 Pose를 받아 글로벌 좌표계로 변환
  * @param cloudIn
@@ -185,6 +188,7 @@ pcl::PointCloud<pcl::PointXYZI>::Ptr local2global(const pcl::PointCloud<PointTyp
     return cloudOut;
 }
 
+//xxx
 /**
  * @brief 글로벌 좌표계의 PointCloud와 Pose를 받아 해당 pose를 기준으로 하는 로컬 좌표계의 Pointcloud로 변환
  * @param cloudIn
@@ -214,6 +218,7 @@ pcl::PointCloud<PointType>::Ptr global2local(const pcl::PointCloud<PointType>::P
     return cloudOut;
 }
 
+//xxx
 /**
  * @brief 글로벌 좌표계의 Point와 Pose를 받아 해당 pose를 기준으로 하는 로컬 좌표계의 Point로 변환
  * @param pointIn
@@ -243,8 +248,6 @@ void LocalMapHandler(const aloam_velodyne::LocalMapAndPose::ConstPtr &_LocalMapA
     pcl::PointCloud<PointType>::Ptr thisKeyFrameDS(new pcl::PointCloud<PointType>());
     pcl::fromROSMsg(_LocalMapAndPose->point_cloud, *thisKeyFrameDS);
 
-    // thisKeyFrameDS = saveClosedPointCloud2(*thisKeyFrameDS, _LocalMapAndPose->pose, LocalMapBoundary);
-
     // 들어온 LocalMapAndPose데이터를 keyPoseIdxPointCloudGFQue에 모두 순서대로 저장.
     mtxkeyPoseIdxPointCloudGFVector.lock();
     keyPoseIdxPointCloudGFVector.push_back(std::make_tuple(_LocalMapAndPose->idx, thisKeyFrameDS, _LocalMapAndPose->pose));
@@ -252,6 +255,7 @@ void LocalMapHandler(const aloam_velodyne::LocalMapAndPose::ConstPtr &_LocalMapA
     mtxkeyPoseIdxPointCloudGFVector.unlock();
 }
 
+//xxx
 /**
  * @brief /LGMAllPose 토픽명, geometry_msgs::PoseArray의 형식의 메시지에 대한 callback함수. allPoseArray와 동기화 된다.
  * @param _poseArray geometry_msgs::PoseArray::ConstPtr
@@ -267,6 +271,7 @@ void LocalMapHandler(const aloam_velodyne::LocalMapAndPose::ConstPtr &_LocalMapA
 //     mtxPoseArray.unlock();
 // }
 
+//xxx
 /**
  * @brief 두 히스토그램 간의 유클리디안 거리 계산 함수
  * @param hist1 pcl::Histogram<135>
@@ -288,6 +293,7 @@ double calculateEuclideanDistance(const pcl::Histogram<135>& hist1, const pcl::H
     return distance;
 }
 
+// xxx
 /**
  * @brief cloudIn에 대해서 euclideanClustering을 수행하여, 클러스터링 된 point들의 평균점과 그에 해당하는 디스크립터를 반환하는 함수
  * @param cloudIn pcl::PointCloud<PointType>::Ptr
@@ -414,6 +420,7 @@ pcl::PointCloud<PointType>::Ptr euclideanClusteringOnlyClusters( const pcl::Poin
     return cloudOut;
 }
 
+//xxx
 /**
  * @brief cloudIn에 대해서 euclideanClustering을 수행하여, 클러스터링 된 point들의 평균점을 반환하고, 클러스터링 되지 않은 점들 또한 분리시켜 반환한다.
  * @param cloudIn pcl::PointCloud<PointType>::Ptr
@@ -479,6 +486,7 @@ std::tuple<pcl::PointCloud<PointType>::Ptr, pcl::PointCloud<PointType>::Ptr> euc
     return {cloudOut, nonClusteredPoints};
 }
 
+//process methods  
 void KeypointDescriptorProcess( void ) {
 }
 
@@ -525,13 +533,11 @@ void KeypointMergingProcess( void ) {
         globalKPCache->clear();
         // pcl::PointCloud<PointType>::Ptr globalPCCache(new pcl::PointCloud<PointType>); // globalKPCache: KeypointMergingProcessRange를 합친 PC
         for (int node_idx = KeypointMergingProcessRange[0]; node_idx < KeypointMergingProcessRange[1]; node_idx++) {
-            // cout << "[ㅐㅐㅐㅐㅐㅐㅐㅐㅐㅐㅐㅐㅐㅐㅐㅐㅐㅐㅐㅐㅐㅐ]" << KeyPoseKeyPointsGFVector[node_idx]->points.size() << endl;
             *globalKPCache += *KeyPoseKeyPointsGFVector[node_idx];
             *globalPCCache += *get<1>(keyPoseIdxPointCloudGFVector[node_idx]);
         }
         downSizeFilter.setInputCloud(globalPCCache);
         downSizeFilter.filter(*globalPCCache);
-        // cout << globalKPCache->points.size() << endl;
         auto clusteredKPCache = euclideanClusteringOnlyClusters(globalKPCache, 0.1, 4);
         
         for (int i = 0; i < clusteredKPCache->size(); i++) {
@@ -554,9 +560,7 @@ void KeypointMergingProcess( void ) {
             if (surroundPC->points.size() < 10) {
                 continue;
             }
-            // if (surroundPC->points.size)
             pcl::PointCloud<PointType>::Ptr KPCache(new pcl::PointCloud<PointType>);
-            // cout<<"!!!!!!!!!!!!!!!!!!!!         "<< globalPCCache->points.size()<<  " || "<< surroundPC->points.size() <<" || "<< saveClosedPointCloud(*globalPCCache, cpoint, 4.0).points.size() <<endl;
             KPCache->points.push_back(cpoint);
             pcl::PointXYZI cpose;
             cpose.x = get<2>(keyPoseIdxPointCloudGFVector[minIdx]).position.x;
@@ -564,41 +568,16 @@ void KeypointMergingProcess( void ) {
             cpose.z = get<2>(keyPoseIdxPointCloudGFVector[minIdx]).position.z;
             KPCache->points.push_back(cpose);
 
-            KeyPointsWithSurroundsGFPairVector.push_back(std::make_tuple(KPCache, surroundPC));
+            pcl::Histogram<135> dummyDescriptor;
+            KPwithInfo.push_back(std::make_tuple(KPCache, surroundPC, minIdx, dummyDescriptor));
         }
 
         auto end_time0 = std::chrono::high_resolution_clock::now();
         auto duration0 = std::chrono::duration_cast<std::chrono::microseconds>(end_time0 - start_time0);
         processtimetotal += duration0.count()/1000.0;
         processtimeN++;
-        cout << "    [MergingProcess] coverage: " << KeypointMergingProcessRange[0] << "~" << KeypointMergingProcessRange[1] << " || clusterPointNum: " << clusteredKPCache->size() << " || All Keypoints: " << KeyPointsWithSurroundsGFPairVector.size() << " || process time: " << processtimetotal/processtimeN << "(ms)" << endl;
+        cout << "    [MergingProcess] coverage: " << KeypointMergingProcessRange[0] << "~" << KeypointMergingProcessRange[1] << " || clusterPointNum: " << clusteredKPCache->size() << " || All Keypoints: " << KPwithInfo.size() << " || process time: " << processtimetotal/processtimeN << "(ms)" << endl;
         
-        // int rangeCache = 0;
-        // rangeCache = KeypointMergingProcessRange[1] + 20;
-        // mtxPoseArray.lock();
-        // if (rangeCache > allPoseArray.poses.size()) {rangeCache = allPoseArray.poses.size();}
-        // mtxPoseArray.unlock();
-        // for (int i = 0; i < clusteredKPCache->size(); i++) {
-        //     float minDist = 1000000.0;
-        //     int minIdx = 0;
-        //     PointType currentPoint = clusteredKPCache->points[i];
-
-        //     for(int j = KeypointMergingProcessRange[0] - 20; j < rangeCache; j++) {
-            
-        //         geometry_msgs::Pose currentPose = allPoseArray.poses[j]; // get<1>(globalKeypointsVector[j]) -> j번째 keynode의 pose
-
-        //         double distance = std::sqrt(std::pow(currentPoint.x - currentPose.position.x, 2) +
-        //                                     std::pow(currentPoint.y - currentPose.position.y, 2) +
-        //                                     std::pow(currentPoint.z - currentPose.position.z, 2));
-        //         if (distance < minDist) {
-        //             minIdx = j;
-        //             minDist = distance;
-        //         }
-        //     }
-        //     get<0>(globalKPandDCVector[minIdx]) = keyPointIdx;
-        //     get<1>(globalKPandDCVector[minIdx]) = currentPoint;
-        //     keyPointIdx++;
-        // }
         rate.sleep();
     }
 }
@@ -667,8 +646,8 @@ void PubKeypointProcess( void ) {
     ros::Rate rate(frequency);
     long unsigned int keypointCount = 0;
     while ( ros::ok() ) {
-        while ( keypointCount < KeyPointsWithSurroundsGFPairVector.size() ) {
-            if (KeyPointsWithSurroundsGFPairVector.size() == 0){
+        while ( keypointCount < KPwithInfo.size() ) {
+            if (KPwithInfo.size() == 0){
                 rate.sleep();
                 break;
             }
@@ -678,8 +657,8 @@ void PubKeypointProcess( void ) {
             // pcl::PointCloud<PointType> KPPC;
             // KPPC.push_back());
             
-            pcl::toROSMsg(*get<0>(KeyPointsWithSurroundsGFPairVector[keypointCount]), KPmsg);
-            pcl::toROSMsg(*get<1>(KeyPointsWithSurroundsGFPairVector[keypointCount]), Smsg);
+            pcl::toROSMsg(*get<0>(KPwithInfo[keypointCount]), KPmsg);
+            pcl::toROSMsg(*get<1>(KPwithInfo[keypointCount]), Smsg);
 
             KPSurrmsg.keypoint_point_cloud = KPmsg;
             KPSurrmsg.surround_point_cloud = Smsg;
@@ -687,8 +666,8 @@ void PubKeypointProcess( void ) {
             pubKeyPointSurround.publish(KPSurrmsg);
             keypointCount++;
         }
-        if ((keypointCount == KeyPointsWithSurroundsGFPairVector.size()) && ((KeyPointsWithSurroundsGFPairVector.size() != 0))) {
-            cout << "        [PubKeypointProcess] pub AllPoint. " << keypointCount << " / " << KeyPointsWithSurroundsGFPairVector.size() << endl;
+        if ((keypointCount == KPwithInfo.size()) && ((KPwithInfo.size() != 0))) {
+            cout << "        [PubKeypointProcess] pub AllPoint. " << keypointCount << " / " << KPwithInfo.size() << endl;
         }
         
         rate.sleep();
@@ -701,25 +680,14 @@ void KeypointDisplayProcess( void ) {
     while (ros::ok()){
         pcl::PointCloud<PointType>::Ptr globalKPMapforDisplay(new pcl::PointCloud<PointType>);
         int i = 0;
-        for (const auto &KPandDC : KeyPointsWithSurroundsGFPairVector) {
+        for (const auto &KPandDC : KPwithInfo) {
             globalKPMapforDisplay->points.push_back(get<0>(KPandDC)->points[0]);
             i++;
         }
-        // cout << "[KeyPointsWithSurroundsGFPairVector's point count]: " << i << endl;
         sensor_msgs::PointCloud2 KeypointMsg;
         pcl::toROSMsg(*globalKPMapforDisplay, KeypointMsg);
         KeypointMsg.header.frame_id = "/camera_init";
         pubKeyPointDisplay.publish(KeypointMsg);
-        
-        pcl::PointCloud<PointType>::Ptr globalKRMapforDisplay(new pcl::PointCloud<PointType>);
-        for (size_t j = 0; j < KeyPointsWithSurroundsGFPairVector.size(); j++) {
-            *globalKRMapforDisplay += *get<1>(KeyPointsWithSurroundsGFPairVector[j]);
-        }
-        sensor_msgs::PointCloud2 KeyRegionMsg;
-        pcl::toROSMsg(*globalKRMapforDisplay, KeyRegionMsg);
-        KeyRegionMsg.header.frame_id = "/camera_init";
-        pubKeyregionDisplay.publish(KeyRegionMsg);
-        rate.sleep();
     }
 }
 
@@ -739,14 +707,15 @@ int main(int argc, char **argv)
     downSizeFilter.setLeafSize(FilterSize, FilterSize, FilterSize);
 
     ros::Subscriber subKeyLocalMap = nh.subscribe<aloam_velodyne::LocalMapAndPose>("/LGMLocalMap", 100, LocalMapHandler);
+    ros::Subscriber subDescriptor = nh.subscribe<aloam_velodyne::KPAndDescriptor>("/KPAndDescriptor", 100, KPAndDescriptorHandler);
     // ros::Subscriber subAllPose = nh.subscribe<geometry_msgs::PoseArray>("/LGMAllPose", 100, PoseHandler);
 
     pubKeyPointSurround = nh.advertise<aloam_velodyne::KPAndSurroundPC>("/KPSurroundPC", 100);
 
-	pubLCdetectResult = nh.advertise<aloam_velodyne::LCPair>("/LCdetectResult", 100);
-    pubKeyPointResult = nh.advertise<aloam_velodyne::PointCloud2List>("/keyPointResult", 100);
+	// pubLCdetectResult = nh.advertise<aloam_velodyne::LCPair>("/LCdetectResult", 100);
+    // pubKeyPointResult = nh.advertise<aloam_velodyne::PointCloud2List>("/keyPointResult", 100);
     pubKeyPointDisplay = nh.advertise<sensor_msgs::PointCloud2>("/keyPointDisplay", 100);
-    pubKeyregionDisplay = nh.advertise<sensor_msgs::PointCloud2>("/keyregionDisplay", 100);
+    // pubKeyregionDisplay = nh.advertise<sensor_msgs::PointCloud2>("/keyregionDisplay", 100);
 
     std::thread threadKPDetect(KeypointDetectionProcess);
     std::thread threadKPMerge(KeypointMergingProcess);
