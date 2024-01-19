@@ -33,8 +33,8 @@ def nanargsort(arr):
 
 class GraphMatchingLoopCloser():
     def __init__(self) -> None:
-        rospy.Subscriber("/keypointGlobalGraph", MapAndDescriptors, self.globalHandler)
-        rospy.Subscriber("/keypointLocalGraph", MapAndDescriptors, self.localHandler)
+        rospy.Subscriber("/globalGraph", MapAndDescriptors, self.globalHandler)
+        rospy.Subscriber("/localGraph", MapAndDescriptors, self.localHandler)
 
         self.marker_pub = rospy.Publisher('/keypointMatchingDisplay', MarkerArray, queue_size=1)
         self.Graph_pub = rospy.Publisher('/keypointMatchingGraphDisplay', MarkerArray, queue_size=1)
@@ -65,9 +65,11 @@ class GraphMatchingLoopCloser():
             self.globalKeypointsPC = orh.rospc_to_o3dpc(globalMapMsg.keypoints)
             self.globalDescriptor = np.zeros(shape=(1,135))
             for i in range(globalMapMsg.size):
-                self.globalDescriptor = np.append(self.globalDescriptor, rnm.to_numpy_f64(globalMapMsg.descriptors.descriptor[i]).reshape(1, 135), axis=0)
+                self.globalDescriptor = np.append(self.globalDescriptor, np.array(globalMapMsg.descriptors.descriptor[i].data).reshape(1, 135), axis=0)
             self.globalDescriptor = np.delete(self.globalDescriptor, 0, axis=0)
-            Keypoint = np.asarray(self.globalKeypointsPC.points)
+            # print("[1]", self.globalKeypointsPC)
+            # print("[2]", np.shape(self.globalDescriptor))
+            # Keypoint = np.asarray(self.globalKeypointsPC.points)
         
             # Calculate pairwise Euclidean distances
             # distances = squareform(pdist(Keypoint))
@@ -90,9 +92,11 @@ class GraphMatchingLoopCloser():
             self.localDescriptor = np.zeros(shape=(1,135))
             self.localKeypointsPC = orh.rospc_to_o3dpc(localMapMsg.keypoints)
             for i in range(localMapMsg.size):
-                self.localDescriptor = np.append(self.localDescriptor, rnm.to_numpy_f64(localMapMsg.descriptors.descriptor[i]).reshape(1, 135), axis=0)
+                self.localDescriptor = np.append(self.localDescriptor, np.array(localMapMsg.descriptors.descriptor[i].data).reshape(1, 135), axis=0)
             self.localDescriptor = np.delete(self.localDescriptor, 0, axis=0)
-            Keypoint = np.asarray(self.localKeypointsPC.points)
+            # Keypoint = np.asarray(self.localKeypointsPC.points)
+
+            # print(self.localKeypointsPC)
         
             # # Calculate pairwise Euclidean distances
             # distances = squareform(pdist(Keypoint))
@@ -118,9 +122,14 @@ class GraphMatchingLoopCloser():
         with self.mutexGraph:
             self.distances = distances
             row_indices, col_indices = np.where(distances <= 0.023)
+            if (self.row_indices == 0):
+                return
+            # print(np.shape(self.globalKeypointsPC), np.shape(self.globalDescriptor))
             # print(self.row_indices, self.col_indices)
             self.closest_indices = np.argmin(distances, axis=1)
             self.closest_indices_3rd = np.argsort(distances, axis=1, kind='quicksort')[:, :1]
+            # print(self.distances)
+            # print(self.closest_indices_3rd)
             self.matchingGraph(row_indices, col_indices)
 
     def matchingGraph(self, row_indices, col_indices):
@@ -167,23 +176,23 @@ class GraphMatchingLoopCloser():
             # isolated_nodesL = [node for node in self.Glocal.nodes if self.Glocal.degree(node) == 0]
             # self.Glocal.remove_nodes_from(isolated_nodesL)
 
-            AG = nx.to_numpy_array(self.Gglobal)
-            AL = nx.to_numpy_array(self.Glocal)
+            # AG = nx.to_numpy_array(self.Gglobal)
+            # AL = nx.to_numpy_array(self.Glocal)
 
-            nG = np.array([np.shape(AG)[0]])
-            nL = np.array([np.shape(AL)[0]])
+            # nG = np.array([np.shape(AG)[0]])
+            # nL = np.array([np.shape(AL)[0]])
 
-            num_nodesL = np.shape(AL)[0]
-            num_nodesG = np.shape(AG)[0]
+            # num_nodesL = np.shape(AL)[0]
+            # num_nodesG = np.shape(AG)[0]
 
-            GL = nx.from_numpy_array(AL)
-            GG = nx.from_numpy_array(AG)
+            # GL = nx.from_numpy_array(AL)
+            # GG = nx.from_numpy_array(AG)
 
-            connG, edgeG = pygm.utils.dense_to_sparse(AG)
-            connL, edgeL = pygm.utils.dense_to_sparse(AL)
-            import functools
-            gaussian_aff = functools.partial(pygm.utils.gaussian_aff_fn, sigma=.1) # set affinity function
-            K = pygm.utils.build_aff_mat(None, edgeG, connG, None, edgeL, connL, nG, None, nL, None, edge_aff_fn=gaussian_aff)
+            # connG, edgeG = pygm.utils.dense_to_sparse(AG)
+            # connL, edgeL = pygm.utils.dense_to_sparse(AL)
+            # import functools
+            # gaussian_aff = functools.partial(pygm.utils.gaussian_aff_fn, sigma=.1) # set affinity function
+            # K = pygm.utils.build_aff_mat(None, edgeG, connG, None, edgeL, connL, nG, None, nL, None, edge_aff_fn=gaussian_aff)
 
             # X = pygm.rrwm(K, nG, nL)
             # X = pygm.hungarian(X)
@@ -192,7 +201,7 @@ class GraphMatchingLoopCloser():
 
             iiii = 0
 
-            for edge in GG.edges():
+            for edge in self.Gglobal.edges():
                 marker = Marker()
                 marker.header.frame_id = "/camera_init"
                 marker.type = Marker.LINE_STRIP
@@ -216,7 +225,7 @@ class GraphMatchingLoopCloser():
             print(iiii)
             
             
-            for edge in GL.edges():
+            for edge in self.Glocal.edges():
                 marker = Marker()
                 marker.header.frame_id = "/camera_init"
                 marker.type = Marker.LINE_STRIP
@@ -266,7 +275,7 @@ class GraphMatchingLoopCloser():
             self.Graph_pub.publish(marker_array)
 
     def pubMatchingDisplay(self):
-        if len(self.closest_indices) > 2:
+        if len(self.closest_indices_3rd) > 2:
             with self.mutexGraph:
                 
                 marker_array = MarkerArray()
@@ -276,6 +285,7 @@ class GraphMatchingLoopCloser():
 
                 i = 0
                 for idx, nnidx in enumerate(self.closest_indices_3rd):
+                    # print("[nnidx]", nnidx)
                     for nidx in nnidx:
                         line_marker = Marker()
                         line_marker.header.frame_id = "/camera_init"  # Change 'base_link' to your desired frame
@@ -300,22 +310,25 @@ class GraphMatchingLoopCloser():
                         #         line_marker.color.a = 0.3
                         # else:
                         #     continue
+                        # 0.025보다 거리가 멀면 빨강
                         if self.distances[idx, nidx] > 0.025:
-                            continue
                             line_marker.scale.x = 0.05
                             line_marker.color.r = 1.0 #random.random()
                             line_marker.color.g = 0.2
                             line_marker.color.b = 0.2
                             line_marker.color.a = 0.9
 
+                        # 0.024보다 거리가 가까우면
                         elif self.distances[idx, nidx] < 0.024:
                             # print(idx, nidx)
-                            if math.sqrt((x2 - x1)**2 + (y2 - y1)**2 + (z2 - z1)**2) < 8.0:
+                            # 그 중에서 실제 거리가 10m보다 가까우면 두꺼운 파랑
+                            if math.sqrt((x2 - x1)**2 + (y2 - y1)**2 + (z2 - z1)**2) < 50.0:
                                 line_marker.scale.x = 0.5
                                 line_marker.color.r = 0.0 #random.random()
                                 line_marker.color.g = 0.0
                                 line_marker.color.b = 1.0
                                 line_marker.color.a = 1.0
+                            # 거리는 매칭되었지만 10m보다 먼 점이면 검정
                             else:
                                 if random.random() < 0.8:
                                     continue
@@ -324,8 +337,8 @@ class GraphMatchingLoopCloser():
                                 line_marker.color.g = 0.0
                                 line_marker.color.b = 0.0
                                 line_marker.color.a = 1.0                              
-                        else:
-                            continue
+                        else: # 0.24~0.25사이는 청록
+                            # continue
                             line_marker.scale.x = 0.2
                             line_marker.color.r = 0.0 #random.random()
                             line_marker.color.g = 1.0
@@ -337,14 +350,14 @@ class GraphMatchingLoopCloser():
                         line_marker.points.append(point2)
 
                         # Add the line marker to the array
-                        # marker_array.markers.append(line_marker)
+                        marker_array.markers.append(line_marker)
                 self.marker_pub.publish(marker_array)
                         # print(marker_array)
 
 
 def main():
     graphLC = GraphMatchingLoopCloser()
-    rate = rospy.Rate(1.0)
+    rate = rospy.Rate(0.5)
     while not rospy.is_shutdown():
         rate.sleep()
         graphLC.matchingKeypoints()

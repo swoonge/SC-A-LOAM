@@ -34,6 +34,8 @@
     <param name="triangulation_setMu" type="double" value="10.0"/>
     <param name="triangulation_setMaximumNearestNeighbors" type="int" value="70"/>
 
+    <param name="localGraphMu" type="double" value="1.5"/>
+
     <!-- SC-A-LOAM -->
     <param name="keyframe_meter_gap" type="double" value="3.0"/> 
 
@@ -56,9 +58,9 @@
     <!-- <node pkg="aloam_velodyne" type="alaserDescriptor" name="alaseralaserDescriptor" output="screen" /> -->
     <!-- <node pkg="aloam_velodyne" type="alaserScDetector" name="alaserScDetector" output="screen" /> -->
 
-    <!-- <arg name="rviz" default="true" />
+    <arg name="rviz" default="true" />
     <group if="$(arg rviz)">
         <node launch-prefix="nice" pkg="rviz" type="rviz" name="rviz" args="-d $(find aloam_velodyne)/rviz_cfg/aloam_velodyne.rviz" />
-    </group> -->
+    </group>
 
 </launch>

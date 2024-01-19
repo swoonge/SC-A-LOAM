@@ -112,40 +112,18 @@ void KeypointDescriptorDetectionProcess( void ) {
     double processtimetotal = 0;
     while (ros::ok) {
         cout << "[SorroundQue.size] " << SorroundQue.size() << endl;
-        while (SorroundQue.size() == 0) {
+        while (SorroundQue.size() != 0) {
             auto start_time = std::chrono::high_resolution_clock::now();
             pcl::PointCloud<PointType>::Ptr SorroundPC(new pcl::PointCloud<PointType>());
             pcl::PointCloud<PointType>::Ptr KPPC(new pcl::PointCloud<PointType>());
 
-            // mtxQue.lock();
-            // SorroundPC = SorroundQue.front();
-            // KPPC = KPQue.front();
-            // SorroundQue.pop();
-            // KPQue.pop();
-            // mtxQue.unlock();
-            // *globalregienforDisplay += *SorroundPC;
-
-            // if (SorroundPC->points.size() == 0) {
-            //     globalregienforDisplayFail->points.push_back(KPPC->points[0]);
-            //     sensor_msgs::PointCloud2 Smsg;
-            //     pcl::toROSMsg(*globalregienforDisplayFail, Smsg);
-            //     Smsg.header.frame_id = "/camera_init";
-            //     pubKeyregionDisplay3.publish(Smsg);
-            //     continue;
-            // }
-
-            //저장하는 코드하나
-            //불러오는 코드하나
-            //해서 저장만 한번 돌리고, 주석처리 후 불러오는거 반복해서 퀄리티 체크
-            // pcl::io::savePCDFileASCII("/home/vision/catkin_ws/src/SC-A-LOAM/src/point_cloud_Sorround.pcd", *SorroundPC);
-            // pcl::io::savePCDFileASCII("/home/vision/catkin_ws/src/SC-A-LOAM/src/point_cloud_KP.pcd", *KPPC);
-
-            if (pcl::io::loadPCDFile<PointType>("/home/vision/catkin_ws/src/SC-A-LOAM/src/point_cloud_Sorround.pcd", *SorroundPC) == -1) {
-                PCL_ERROR("Couldn't read file 'point_cloud_Sorround.pcd'\n");
-            }
-            if (pcl::io::loadPCDFile<PointType>("/home/vision/catkin_ws/src/SC-A-LOAM/src/point_cloud_KP.pcd", *KPPC) == -1) {
-                PCL_ERROR("Couldn't read file 'point_cloud_KP.pcd'\n");
-            }
+            mtxQue.lock();
+            SorroundPC = SorroundQue.front();
+            KPPC = KPQue.front();
+            SorroundQue.pop();
+            KPQue.pop();
+            mtxQue.unlock();
+            *globalregienforDisplay += *SorroundPC;
 
             // cout << "포인트 개수: " << SorroundPC->points.size() << " || " << KPPC->points.size() << endl;
             pcl::PointCloud<pcl::Normal>::Ptr normals(new pcl::PointCloud<pcl::Normal>);
@@ -224,7 +202,6 @@ void KeypointDescriptorDetectionProcess( void ) {
         }
         rate.sleep();
     }
-    
 }
 
 int main(int argc, char **argv)
